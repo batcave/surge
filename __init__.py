@@ -42,6 +42,8 @@ DEFAULT_SETTINGS = dict(
     SKIP_MIGRATE=False,
     BRANCH_NAME='master',
     DJANGO_PROJECT=True,
+    RESTART_NGINX=False,
+    BOUNCE_SERVICES_ONLY_IF_RUNNING=False,
 )
 
 
