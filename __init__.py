@@ -72,6 +72,12 @@ def bool_opt(opt, kwargs, default=False):
     return default
 
 
+def django_check():
+    if not getattr(env.deploy_settings, 'DJANGO_PROJECT', False):
+        print red("This deployment is not configured as a DJANGO_PROJECT")
+        return False
+    return True
+
 @task
 def is_local_clean(*args, **kwargs):
     print cyan("Ensuring local working area is clean...")
@@ -142,21 +148,23 @@ def install_requirements(*args, **kwargs):
 
 @task
 def collect_static(*args, **kwargs):
+    print cyan("Collecting static resources")
+    if not django_check():
+        return
     with cd(env.deploy_settings.DEPLOY_PATH):
         with prefix('source activate'):
-            if getattr(env.deploy_settings, 'DJANGO_PROJECT', True):
-                print cyan("Collecting static resources")
-                # Setting verbose to minimal outupt
-                # We aren't going to prompt if we really want to collectstatic
-                run("./manage.py collectstatic -v0 --noinput")
+            # Setting verbose to minimal outupt
+            # We aren't going to prompt if we really want to collectstatic
+            run("./manage.py collectstatic -v0 --noinput")
 
 @task
 def run_migrations(*args, **kwargs):
+    print cyan("Running migrations")
+    if not django_check():
+        return
     with cd(env.deploy_settings.DEPLOY_PATH):
         with prefix('source activate'):
-            if getattr(env.deploy_settings, 'DJANGO_PROJECT', True):
-                print cyan("Running migrations")
-                run("./manage.py migrate")
+            run("./manage.py migrate")
 
 @task
 def run_extras(*args, **kwargs):
@@ -208,10 +216,12 @@ def update_crontab(*args, **kwargs):
 
 @task
 def sync_db(*args, **kwargs):
+    print cyan("Sync DB")
+    if not django_check():
+        return
     with cd(env.deploy_settings.DEPLOY_PATH):
         with prefix('source activate'):
             if not getattr(env.deploy_settings, 'SKIP_SYNCDB', False):
-                print cyan("Sync DB")
                 run("./manage.py syncdb")
 
 @task(default=True)
