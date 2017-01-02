@@ -149,6 +149,21 @@ def pull(*args, **kwargs):
         run('git checkout {0}'.format(branch))
         run('git pull')
 
+@task
+def full_pull(*args, **kwargs):
+    """
+    runs:
+    fix_project_owners
+    pull
+    update_submodules
+    fix_project_owners
+
+    :branch= sets the desired branch
+    """
+    fix_project_owners()
+    pull(**kwargs)
+    update_submodules()
+    fix_project_owners()
 
 @task
 def update_submodules(*args, **kwargs):
