@@ -82,6 +82,13 @@ def django_check():
 
 @task
 def is_local_clean(*args, **kwargs):
+    """
+    Checks that the local git work area is clean or not
+
+    runs:
+    git status --porcelain
+    """
+
     print cyan("Ensuring local working area is clean...")
     has_changes = local("git status --porcelain", capture=True)
     if has_changes:
@@ -91,6 +98,13 @@ def is_local_clean(*args, **kwargs):
 
 @task
 def is_remote_clean(*args, **kwargs):
+    """
+    Checks that the remote git work area is clean or not
+
+    runs:
+    git --work-tree=DEPLOY_PATH --git-dir=DEPLOY_PATH/.git status --porcelain
+    """
+
     print cyan("Ensuring remote working area is clean...")
     git_cmd = "git --work-tree={0} --git-dir={0}/.git".format(env.deploy_settings.DEPLOY_PATH)
     has_changes = run(git_cmd + " status --porcelain")
@@ -101,6 +115,13 @@ def is_remote_clean(*args, **kwargs):
 
 @task
 def fix_project_owners(*args, **kwargs):
+    """
+    runs:
+    chown USER:GROUP -R *
+    chown USER:GROUP -R .git*
+    chown USER:GROUP -R .env|env (if these exist)
+    """
+
     with cd(env.deploy_settings.DEPLOY_PATH):
         print cyan('Fixing project owners')
         sudo('chown %s -R *' % env.deploy_settings.CHOWN_TARGET)
@@ -111,7 +132,14 @@ def fix_project_owners(*args, **kwargs):
 
 @task
 def pull(*args, **kwargs):
-    """:branch= sets the desired branch"""
+    """
+    runs:
+    git fetch
+    git checkout {branch from settings or supplied}
+    git pull
+
+    :branch= sets the desired branch
+    """
 
     default_branch = getattr(env.deploy_settings, 'BRANCH_NAME', 'master')
     branch = kwargs.get('branch', default_branch)
@@ -124,6 +152,11 @@ def pull(*args, **kwargs):
 
 @task
 def update_submodules(*args, **kwargs):
+    """
+    runs:
+    git submodule init
+    git submodule update
+    """
     with cd(env.deploy_settings.DEPLOY_PATH):
             print cyan('Initializing submodules')
             run('git submodule init')
@@ -135,6 +168,13 @@ def update_submodules(*args, **kwargs):
 
 @task
 def fix_logfile_permissions(*args, **kwargs):
+    """
+    Sets the correct file permissions on the files in the LOG_PATH
+
+    runs:
+    chmod --preserve-root --changes a+r,ug+w -R LOGS_PATH
+    """
+
     with cd(env.deploy_settings.DEPLOY_PATH):
         if getattr(env.deploy_settings, 'LOGS_PATH', False):
             print cyan("Ensuring proper permissions on log files (-rw-rw-r--)")
@@ -143,6 +183,14 @@ def fix_logfile_permissions(*args, **kwargs):
 
 @task
 def install_requirements(*args, **kwargs):
+    """
+    Installs the project's requirements from the project's requirements.txt file
+    into the project's activated virtual environment.
+
+    runs:
+    pip install -r requirements.txt
+    """
+
     with cd(env.deploy_settings.DEPLOY_PATH):
         with prefix("source activate"):
             print cyan("Installing from requirements.txt")
@@ -150,6 +198,11 @@ def install_requirements(*args, **kwargs):
 
 @task
 def collect_static(*args, **kwargs):
+    """
+    runs:
+    manage.py collectstatic -v0 --noinput
+    """
+
     print cyan("Collecting static resources")
     if not django_check():
         return
@@ -161,6 +214,13 @@ def collect_static(*args, **kwargs):
 
 @task
 def run_migrations(*args, **kwargs):
+    """
+    Runs the Django manaagement command migrate for DJANGO_PROJECT=True
+
+    runs:
+    manage.py migrate
+    """
+
     print cyan("Running migrations")
     if not django_check():
         return
@@ -170,6 +230,10 @@ def run_migrations(*args, **kwargs):
 
 @task
 def run_extras(*args, **kwargs):
+    """
+    Runs any extra commands on HOST in EXTRA_COMMANDS list of the settings
+    """
+
     with cd(env.deploy_settings.DEPLOY_PATH):
         with prefix('source activate'):
             for cmd in getattr(env.deploy_settings, 'EXTRA_COMMANDS', []):
@@ -178,12 +242,24 @@ def run_extras(*args, **kwargs):
 
 @task
 def restart_nginx(*args, **kwargs):
+    """
+    runs:
+    sudo service nginx restart
+    """
+
     print cyan("Restarting Nginx")
     sudo('service nginx restart')
 
 @task
 def bounce_services(*args, **kwargs):
-    """:restart_nginx=True will also restart nginx"""
+    """
+    Restarts the services on HOST from the BOUNCE_SERVICES list of the settings.
+
+    runs:
+    sudo service X restart (where X is each member of the BOUNCE_SERVICES list)
+
+    :restart_nginx=True will also restart nginx
+    """
 
     print cyan("Bouncing processes...")
     for service in env.deploy_settings.BOUNCE_SERVICES:
@@ -200,6 +276,13 @@ def bounce_services(*args, **kwargs):
 
 @task
 def services_status(*args, **kwargs):
+    """
+    Returns a list of the current status of the services on HOST from the BOUNCE_SERVICES list.
+
+    runs:
+    sudo service X status (where x is each member of the BOUNCE_SERVICES list)
+    """
+
     for service in env.deploy_settings.BOUNCE_SERVICES:
         status = sudo('service %s status' % service, quiet=True)
         hilight = green
@@ -209,6 +292,13 @@ def services_status(*args, **kwargs):
 
 @task
 def update_crontab(*args, **kwargs):
+    """
+    Replaces the current crontab for CRONTAB_OWNER on HOST with CRON_FILE
+
+    runs:
+    sudo crontab -u CRONTAB_OWNER CRON_FILE
+    """
+
     if getattr(env.deploy_settings, 'CRON_FILE', None) and \
        getattr(env.deploy_settings, 'CRONTAB_OWNER', None):
         print green("Updating crontab...")
@@ -218,13 +308,19 @@ def update_crontab(*args, **kwargs):
 
 @task
 def sync_db(*args, **kwargs):
+    """
+    Runs the Django manaagement command syncdb for DJANGO_PROJECT=True
+
+    runs:
+    manage sync_db
+    """
+
     print cyan("Sync DB")
     if not django_check():
         return
     with cd(env.deploy_settings.DEPLOY_PATH):
         with prefix('source activate'):
-            if not getattr(env.deploy_settings, 'SKIP_SYNCDB', False):
-                run("./manage.py syncdb")
+            run("./manage.py syncdb")
 
 @task(default=True)
 def full_deploy(*args, **kwargs):
@@ -242,6 +338,20 @@ def full_deploy(*args, **kwargs):
         - Updating submodules
         - Changing owner:group to draftboard
         - Bounce the webserver
+
+    runs:
+    fix_project_owners
+    pull
+    update_submodules
+    fix_logfile_permissions
+    install_requirements
+    collect_static
+    sync_db
+    run_migrations
+    run_extras
+    fix_project_owners
+    bounce_services
+    update_crontab
     """
 
     print green("Beginning deployment...")
