@@ -58,8 +58,9 @@ PROD_SETTINGS = deploy.BASE_SETTINGS(
     ]
 )
 
-env.host_string = PROD_SETTINGS.HOST
-env.deploy_settings = PROD_SETTINGS
+deploy.env.host_string = PROD_SETTINGS.HOST
+deploy.env.deploy_settings = PROD_SETTINGS
+
 ```
 You can add additional project specific deployment commands by adding @task decorators.
 You can use @with_settings decorators for different deployment targets a project might require.
