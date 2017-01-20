@@ -116,6 +116,8 @@ def is_remote_clean(*args, **kwargs):
 @task
 def fix_project_owners(*args, **kwargs):
     """
+    Ensure the project files have the USER:GROUP ownership
+
     runs:
     chown USER:GROUP -R *
     chown USER:GROUP -R .git*
@@ -133,6 +135,8 @@ def fix_project_owners(*args, **kwargs):
 @task
 def pull(*args, **kwargs):
     """
+    git fetch; git checkout; git pull
+
     runs:
     git fetch
     git checkout {branch from settings or supplied}
@@ -152,6 +156,8 @@ def pull(*args, **kwargs):
 @task
 def full_pull(*args, **kwargs):
     """
+    fix_project_owners, pull, update_submodules, fix_project_owners
+
     runs:
     fix_project_owners
     pull
@@ -168,6 +174,8 @@ def full_pull(*args, **kwargs):
 @task
 def update_submodules(*args, **kwargs):
     """
+    Init and update the git submodules for the project
+
     runs:
     git submodule init
     git submodule update
@@ -214,6 +222,8 @@ def install_requirements(*args, **kwargs):
 @task
 def collect_static(*args, **kwargs):
     """
+    Collect static assets for a Django project
+
     runs:
     manage.py collectstatic -v0 --noinput
     """
@@ -258,6 +268,8 @@ def run_extras(*args, **kwargs):
 @task
 def restart_nginx(*args, **kwargs):
     """
+    Restart the nginx service on HOST
+
     runs:
     sudo service nginx restart
     """
