@@ -1,9 +1,11 @@
 from distutils.util import strtobool
+from path import path
 import re
 from fabric.api import env, local, abort, sudo, cd, run, task
 from fabric.colors import green, red, blue, cyan, yellow, magenta
 from fabric.context_managers import prefix
 from fabric.decorators import hosts, with_settings
+from fabric.contrib.files import exists
 
 
 ## Example settings
@@ -272,6 +274,23 @@ def collectstatic(fix_ownerships=True, *args, **kwargs):
             # Setting verbose to minimal outupt
             # We aren't going to prompt if we really want to collectstatic
             run("./manage.py collectstatic -v0 --noinput")
+
+            # Touch the .less/.js files in STATIC_ROOT
+            # Exclude the _cache directory used by Compress
+            out = run("./manage.py diffsettings --all | grep STATIC_ROOT")
+            split_srp = out.split("=")
+            srp = split_srp[1].strip() if len(split_srp) > 1 else None
+
+            static_root_path = eval(srp) if srp else 'collected-assets'  # Might be using path.py, so eval()
+            if exists(static_root_path):
+                print cyan('Touching *.less and *.js in {0}'.format(static_root_path))
+                run('find {0} \( -name "*.less" -or -name "*.js" \) -not -path "*/_cache*/*" -exec touch {{}} +'.format(static_root_path))
+                # Only do this if collectstatic is called alone
+                if fix_ownerships:
+                    sudo('chown {0} -R {1}'.format(env.deploy_settings.CHOWN_TARGET,
+                                                   static_root_path))
+                print ""
+
 
 @task
 def run_migrations(*args, **kwargs):
