@@ -256,7 +256,7 @@ def install_requirements(*args, **kwargs):
             run("pip install -r requirements.txt")
 
 @task
-def collect_static(*args, **kwargs):
+def collectstatic(fix_ownerships=True, *args, **kwargs):
     """
     Collect static assets for a Django project
 
@@ -409,7 +409,7 @@ def full_deploy(*args, **kwargs):
     update_submodules
     fix_logfile_permissions
     install_requirements
-    collect_static
+    collectstatic
     sync_db
     run_migrations
     run_extras
@@ -446,7 +446,7 @@ def full_deploy(*args, **kwargs):
 
     install_requirements()
 
-    collect_static()
+    collectstatic(fix_ownerships=False)
 
     if not bool_opt('skip_syncdb', kwargs, default=False):
         sync_db()

@@ -111,7 +111,7 @@ Available commands:
     deploy.bounce_services
         :restart_nginx=True|False (default=False)
         :bounce_services_only_if_running=True|False (default=False)
-    deploy.collect_static
+    deploy.collectstatic
     deploy.fix_logfile_permissions
     deploy.fix_ownerships
     deploy.full_deploy (default command as deploy)
@@ -168,7 +168,7 @@ The git branch to pull from during a deploy
 ### DJANGO_PROJECT (True)
 Whether this project is based on Django. Will run Django specific commands during a deploy
 
-If DJANGO_PROJECT is False the sync_db(), collect_static(), and run_migrations() commands will not be run regardless of the SKIP_SYNCDB and SKIP_MIGRATE settings
+If DJANGO_PROJECT is False the sync_db(), collectstatic(), and run_migrations() commands will not be run regardless of the SKIP_SYNCDB and SKIP_MIGRATE settings
 
 ### RESTART_NGINX (False)
 Restart the nginx process along with bouncing services
