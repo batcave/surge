@@ -100,7 +100,7 @@ deploy.services_status
 deploy.restart_nginx
 deploy.is_remote_clean
 deploy.pull:branch=new-feature
-deploy.fix_project_owners
+deploy.fix_ownerships
 ```
 
 ## Deploy commands
@@ -113,7 +113,7 @@ Available commands:
         :bounce_services_only_if_running=True|False (default=False)
     deploy.collect_static
     deploy.fix_logfile_permissions
-    deploy.fix_project_owners
+    deploy.fix_ownerships
     deploy.full_deploy (default command as deploy)
         Any setting can be overridden by supplying :SETTING_A=X,SETTING_B=Y,...
     deploy.full_deploy_with_migrate

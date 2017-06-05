@@ -150,7 +150,7 @@ def is_remote_clean(*args, **kwargs):
     return not has_changes
 
 @task
-def fix_project_owners(*args, **kwargs):
+def fix_ownerships(*args, **kwargs):
     """
     Ensure the project files have the USER:GROUP ownership
 
@@ -161,7 +161,7 @@ def fix_project_owners(*args, **kwargs):
     """
 
     with cd(env.deploy_settings.DEPLOY_PATH):
-        print cyan('Fixing project owners')
+        print cyan('Fixing project ownerships')
         sudo('chown %s -R *' % env.deploy_settings.CHOWN_TARGET)
         sudo('chown %s -R .git*' % env.deploy_settings.CHOWN_TARGET)
         sudo('if [ -e .env ]; then chown %s -R .env; fi' % env.deploy_settings.CHOWN_TARGET)
@@ -192,20 +192,20 @@ def pull(*args, **kwargs):
 @task
 def full_pull(*args, **kwargs):
     """
-    fix_project_owners, pull, update_submodules, fix_project_owners
+    fix_ownerships, pull, update_submodules, fix_ownerships
 
     runs:
-    fix_project_owners
+    fix_ownerships
     pull
     update_submodules
-    fix_project_owners
+    fix_ownerships
 
     :branch= sets the desired branch
     """
-    fix_project_owners()
+    fix_ownerships()
     pull(**kwargs)
     update_submodules()
-    fix_project_owners()
+    fix_ownerships()
 
 @task
 def update_submodules(*args, **kwargs):
@@ -403,7 +403,8 @@ def full_deploy(*args, **kwargs):
         - Bounce the webserver
 
     runs:
-    fix_project_owners
+    show_settings
+    fix_ownerships
     pull
     update_submodules
     fix_logfile_permissions
@@ -412,7 +413,7 @@ def full_deploy(*args, **kwargs):
     sync_db
     run_migrations
     run_extras
-    fix_project_owners
+    fix_ownerships
     bounce_services
     update_crontab
     """
@@ -435,7 +436,7 @@ def full_deploy(*args, **kwargs):
 
     print green("Updating environment...")
 
-    fix_project_owners()
+    fix_ownerships()
 
     pull(**kwargs)
 
@@ -456,7 +457,7 @@ def full_deploy(*args, **kwargs):
     run_extras()
 
     # post fix owners after checkout and other actions
-    fix_project_owners()
+    fix_ownerships()
 
     bounce_services()
 
