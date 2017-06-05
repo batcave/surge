@@ -1,7 +1,7 @@
 from distutils.util import strtobool
 import re
 from fabric.api import env, local, abort, sudo, cd, run, task
-from fabric.colors import green, red, blue, cyan
+from fabric.colors import green, red, blue, cyan, yellow, magenta
 from fabric.context_managers import prefix
 from fabric.decorators import hosts, with_settings
 
@@ -38,26 +38,41 @@ from fabric.decorators import hosts, with_settings
 
 DEFAULT_SETTINGS = dict(
     REQUIRE_CLEAN=True,
-    SKIP_SYNCDB=False,
-    SKIP_MIGRATE=False,
     BRANCH_NAME='master',
     DJANGO_PROJECT=True,
+    SKIP_SYNCDB=False,
+    SKIP_MIGRATE=False,
     RESTART_NGINX=False,
     BOUNCE_SERVICES_ONLY_IF_RUNNING=False,
 )
 
+REQUIRED_SETTINGS = [
+    'HOST',
+    'USER',
+    'GROUP',
+    'DEPLOY_PATH',
+]
 
 class BASE_SETTINGS(object):
     def __init__(self, *args, **kwargs):
-        self.__dict__.update(DEFAULT_SETTINGS)
-        if "USER" in kwargs:
-            self.CRONTAB_OWNER = kwargs['USER']
-        if "USER" in kwargs and "GROUP" in kwargs:
-            self.CHOWN_TARGET = kwargs['USER'] + ':' + kwargs['GROUP']
-        if "GIT_TREE" not in kwargs:
-            self.GIT_TREE = kwargs['DEPLOY_PATH']
+        sreq = frozenset(REQUIRED_SETTINGS)
+        sset = frozenset(kwargs.keys())
+        missing = sreq.difference(sset)
+        if missing:
+            print red("Required settings are missing; {0}".format(', '.join(list(missing))))
+            raise ValueError
+        self.kwargs = kwargs  # Keep track of supplied settings
+        self.settings = {}  # Keep a dictionary of all the settings
+        self.settings.update(DEFAULT_SETTINGS)
+        self.settings['CRONTAB_OWNER'] = kwargs['USER']
+        self.CHOWN_TARGET = kwargs['USER'] + ':' + kwargs['GROUP']
+        self.settings['GIT_TREE'] = kwargs['DEPLOY_PATH']
+
         # Overide any of these automatically set settings from kwargs
-        self.__dict__.update(kwargs)
+        self.settings.update(kwargs)
+
+        # Make them attributes
+        self.__dict__.update(self.settings)
 
 
 def bool_opt(opt, kwargs, default=False):
@@ -80,6 +95,27 @@ def django_check():
         return False
     return True
 
+@task
+def sudo_check():
+    print cyan("Validating sudo.")
+    result = sudo('echo "Got it!"')
+    if result:
+        return True
+    else:
+        print red("Could not obtain sudo!")
+        return False
+
+@task
+def show_settings():
+    print "\n({0} {1} {2})\n".format(cyan('Configured'), green('Default'), magenta('Overridden Default'))
+    for s in sorted(env.deploy_settings.settings.keys()):
+        v = env.deploy_settings.settings[s]
+        outcolor = cyan
+        if s in DEFAULT_SETTINGS:
+            outcolor = green if v == DEFAULT_SETTINGS[s] else magenta
+
+        print outcolor("{0} = {1}".format(s, v))
+        
 @task
 def is_local_clean(*args, **kwargs):
     """
@@ -380,6 +416,8 @@ def full_deploy(*args, **kwargs):
     bounce_services
     update_crontab
     """
+
+    show_settings()
 
     print green("Beginning deployment...")
     print ""
