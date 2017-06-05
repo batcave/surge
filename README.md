@@ -62,10 +62,18 @@ deploy.env.host_string = PROD_SETTINGS.HOST
 deploy.env.deploy_settings = PROD_SETTINGS
 
 ```
-You can add additional project specific deployment commands by adding @task decorators.
-You can use @with_settings decorators for different deployment targets a project might require.
+You can add additional project specific deployment commands by adding @task decorators to any function.
+
+
+## Alternate deployment targets
+To have additional deployment targets create a new fabfile importing surge and named accordingly. ```fab_training.py``` for example.
+
+Then just call fab using this file:
+``` fab deploy -f fab_training.py```
 
 ``` Python
+import surge as deploy
+
 TRAINING_SETTINGS = deploy.BASE_SETTINGS(
     HOST='ticketing.protectamerica.com,
     DEPLOY_PATH='/deploy/intranettraining',
@@ -81,26 +89,26 @@ TRAINING_SETTINGS = deploy.BASE_SETTINGS(
     ]
 )
 
-@task
-@with_settings(host_string=TRAINING_SETTINGS.HOST,
-               deploy_settings=TRAINING_SETTINGS)
-def deploy_training():
-    deploy.full_deploy()
+deploy.env.host_string = TRAINING_SETTINGS.HOST
+deploy.env.deploy_settings = TRAINING_SETTINGS
 
 ```
 
 ## Example usage
 ```
-deploy
-deploy:require_clean=False
-deploy:require_clean=False,skip_syncdb=True,skip_migrate=True
+fab list
+fab deploy
+fab deploy -f fab_training.py  # will run against this alternate deployment target
+fab deploy:require_clean=False
+fab deploy:require_clean=False,skip_syncdb=True,skip_migrate=True
 
-deploy.bounce_services:restart_nginx=True
-deploy.services_status
-deploy.restart_nginx
-deploy.is_remote_clean
-deploy.pull:branch=new-feature
-deploy.fix_ownerships
+fab deploy.show_settings
+fab deploy.bounce_services:restart_nginx=True
+fab deploy.services_status
+fab deploy.restart_nginx -f fab_training.py
+fab deploy.is_remote_clean -f fab_training.py
+fab deploy.pull:branch=new-feature
+fab deploy.fix_ownerships
 ```
 
 ## Deploy commands
@@ -126,12 +134,14 @@ Available commands:
     deploy.run_extras
     deploy.run_migrations
     deploy.services_status
+    deploy.show_settings
+        Will display the deployment targets configured settings
     deploy.sync_db
     deploy.update_crontab
     deploy.update_submodules
 ```
 
-# API
+# Settings
 Settings utilized for a standard full_deploy (as kwargs)
 
 Instaniate a BASE_SETTINGS Class with these kwargs provided as needed
@@ -195,3 +205,4 @@ Will default to USER:GROUP if not supplied
 
 ### BOUNCE_SERVICES
 The list of service names that will be restarted at the end of the deployment
+
