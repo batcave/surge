@@ -279,9 +279,16 @@ def collectstatic(fix_ownerships=True, *args, **kwargs):
             # Exclude the _cache directory used by Compress
             out = run("./manage.py diffsettings --all | grep STATIC_ROOT")
             split_srp = out.split("=")
-            srp = split_srp[1].strip() if len(split_srp) > 1 else None
+
+            if len(split_srp) > 1:
+                # Sometimes ./manage.py throws strange errors that end up in the output
+                re_split_srp = re.split(r'(\n|\r|\r\n)', split_srp[1])[0]
+                srp = re_split_srp.strip()
+            else:
+                srp = None
 
             static_root_path = eval(srp) if srp else 'collected-assets'  # Might be using path.py, so eval()
+
             if exists(static_root_path):
                 print cyan('Touching *.less and *.js in {0}'.format(static_root_path))
                 run('find {0} \( -name "*.less" -or -name "*.js" \) -not -path "*/_cache*/*" -exec touch {{}} +'.format(static_root_path))
