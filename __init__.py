@@ -134,7 +134,9 @@ def sudo_check():
 
 @task
 def show_settings():
-    print "\n({0} {1} {2})\n".format(cyan('Configured'), green('Default'), magenta('Overridden Default'))
+    print "\n({0} {1} {2})\n".format(cyan('Configured'),
+                                     green('Default'),
+                                     magenta('Overridden Default'))
     for s in sorted(env.deploy_settings.settings.keys()):
         v = env.deploy_settings.settings[s]
         outcolor = cyan
@@ -374,13 +376,36 @@ def bounce_services(*args, **kwargs):
     :restart_nginx=True will also restart nginx
     """
 
-    print cyan("Bouncing processes...")
-    for service in env.deploy_settings.BOUNCE_SERVICES:
-        if bool_opt("bounce_services_only_if_running", kwargs, default=False):
-            status = sudo('service %s status' % service, quiet=True)
-            if re.search(r'{} stop/waiting'.format(service), status):
-                print red("{} NOT bouncing.".format(status))
-                continue
+    if not env.deploy_settings.BOUNCE_SERVICES:
+        return None
+
+    STATUS = {
+        '+': 'Running',
+        '-': 'Stopped/Waiting',
+        '?': 'Unknown'
+    }
+
+    BSOIR = env.deploy_settings.BOUNCE_SERVICES_ONLY_IF_RUNNING
+    print cyan("Bouncing processes...{0}").format("(BOUNCING_SERVICES_ONLY_IF_RUNNING)" if BSOIR else "")
+    the_services = env.deploy_settings.BOUNCE_SERVICES
+    print cyan(the_services)
+
+    r = sudo('service --status-all', quiet=True)
+
+    servreg = r'([\+|\-|\?]).*\]\s+(.*)\b'
+    rservices = [(m.group(1), m.group(2)) for m in re.finditer(servreg, r)]
+
+    there = filter(lambda s: s[1] in the_services, rservices)
+    not_there = filter(lambda s: s not in zip(*there)[1], the_services)
+    
+    for s in not_there:
+        print magenta("{0} not found on {1}".format(s, env.deploy_settings.HOST))
+
+    for status, service in there:
+        print green("{0}: {1}".format(service, STATUS[status]))
+        if status != '+' and BSOIR:
+            print red("{} NOT bouncing".format(service))
+            continue
         sudo('service %s restart' % service)
 
     if bool_opt('restart_nginx', kwargs, default=False):
