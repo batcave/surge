@@ -1,6 +1,7 @@
 from distutils.util import strtobool
 from path import path
 import re
+from functools import wraps
 from fabric.api import env, local, abort, sudo, cd, run, task
 from fabric.colors import green, red, blue, cyan, yellow, magenta
 from fabric.context_managers import prefix
@@ -76,6 +77,8 @@ class BASE_SETTINGS(object):
         # Make them attributes
         self.__dict__.update(self.settings)
 
+        env['surge_stack'] = None  # Used by @surge_stack logic
+
 
 def bool_opt(opt, kwargs, default=False):
     """
@@ -90,12 +93,34 @@ def bool_opt(opt, kwargs, default=False):
         return strtobool(default)
     return default
 
+def needs_django(f):
+    """
+    A decorator on a task to ensure the task is not run if
+    DJANGO_PROJECT = False
+    """
+    @wraps(f)
+    def django_check(*args, **kwargs):
+        if not getattr(env.deploy_settings, 'DJANGO_PROJECT', False):
+            # If this was not called from another surge task then complain
+            if not env.surge_stack:
+                print red("This deployment is not configured as a DJANGO_PROJECT")
+            return None
+        return f(*args, **kwargs)
+    return django_check
 
-def django_check():
-    if not getattr(env.deploy_settings, 'DJANGO_PROJECT', False):
-        print red("This deployment is not configured as a DJANGO_PROJECT")
-        return False
-    return True
+def surge_stack(f):
+    """
+    A surge_stack decorator on a task sets a 'surge_stack' attribute on the
+    environment that is used to signal to other tasks that they were called
+    as part of a sequence of other tasks and to not behave the same as they
+    might if called alone.
+    """
+    @wraps(f)
+    def stash_surge_task(*args, **kwargs):
+        env['surge_stack'] = f.__name__
+        return f(*args, **kwargs)
+
+    return stash_surge_task
 
 @task
 def sudo_check():
@@ -192,6 +217,7 @@ def pull(*args, **kwargs):
         run('git pull')
 
 @task
+@surge_stack
 def full_pull(*args, **kwargs):
     """
     fix_ownerships, pull, update_submodules, fix_ownerships
@@ -258,7 +284,8 @@ def install_requirements(*args, **kwargs):
             run("pip install -r requirements.txt")
 
 @task
-def collectstatic(fix_ownerships=True, *args, **kwargs):
+@needs_django
+def collectstatic(*args, **kwargs):
     """
     Collect static assets for a Django project
 
@@ -267,8 +294,6 @@ def collectstatic(fix_ownerships=True, *args, **kwargs):
     """
 
     print cyan("Collecting static resources")
-    if not django_check():
-        return
     with cd(env.deploy_settings.DEPLOY_PATH):
         with prefix('source activate'):
             # Setting verbose to minimal outupt
@@ -293,13 +318,14 @@ def collectstatic(fix_ownerships=True, *args, **kwargs):
                 print cyan('Touching *.less and *.js in {0}'.format(static_root_path))
                 run('find {0} \( -name "*.less" -or -name "*.js" \) -not -path "*/_cache*/*" -exec touch {{}} +'.format(static_root_path))
                 # Only do this if collectstatic is called alone
-                if fix_ownerships:
+                if not env.surge_stack:
                     sudo('chown {0} -R {1}'.format(env.deploy_settings.CHOWN_TARGET,
                                                    static_root_path))
                 print ""
 
 
 @task
+@needs_django
 def run_migrations(*args, **kwargs):
     """
     Runs the Django manaagement command migrate for DJANGO_PROJECT=True
@@ -309,8 +335,6 @@ def run_migrations(*args, **kwargs):
     """
 
     print cyan("Running migrations")
-    if not django_check():
-        return
     with cd(env.deploy_settings.DEPLOY_PATH):
         with prefix('source activate'):
             run("./manage.py migrate")
@@ -396,6 +420,7 @@ def update_crontab(*args, **kwargs):
         print ""
 
 @task
+@needs_django
 def sync_db(*args, **kwargs):
     """
     Runs the Django manaagement command syncdb for DJANGO_PROJECT=True
@@ -405,13 +430,12 @@ def sync_db(*args, **kwargs):
     """
 
     print cyan("Sync DB")
-    if not django_check():
-        return
     with cd(env.deploy_settings.DEPLOY_PATH):
         with prefix('source activate'):
             run("./manage.py syncdb")
 
 @task(default=True)
+@surge_stack
 def full_deploy(*args, **kwargs):
     """:require_clean=False will deploy even if local repo is not clean
 
@@ -472,7 +496,7 @@ def full_deploy(*args, **kwargs):
 
     install_requirements()
 
-    collectstatic(fix_ownerships=False)
+    collectstatic()
 
     if not bool_opt('skip_syncdb', kwargs, default=False):
         sync_db()
