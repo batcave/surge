@@ -7,7 +7,7 @@ from fabric.colors import green, red, blue, cyan, yellow, magenta
 from fabric.context_managers import prefix
 from fabric.decorators import hosts, with_settings
 from fabric.contrib.files import exists
-
+from pprint import pprint
 
 ## Example settings
 # USER = "intranet"
@@ -58,27 +58,62 @@ REQUIRED_SETTINGS = [
 
 class BASE_SETTINGS(object):
     def __init__(self, *args, **kwargs):
-        sreq = frozenset(REQUIRED_SETTINGS)
-        sset = frozenset(kwargs.keys())
-        missing = sreq.difference(sset)
-        if missing:
-            print red("Required settings are missing; {0}".format(', '.join(list(missing))))
-            raise ValueError
-        self.kwargs = kwargs  # Keep track of supplied settings
+        self.kwargs = boold_up(kwargs)  # Keep track of original supplied settings
         self.settings = {}  # Keep a dictionary of all the settings
         self.settings.update(DEFAULT_SETTINGS)
-        self.settings['CRONTAB_OWNER'] = kwargs['USER']
-        self.CHOWN_TARGET = kwargs['USER'] + ':' + kwargs['GROUP']
-        self.settings['GIT_TREE'] = kwargs['DEPLOY_PATH']
+        env['surge_stack'] = None  # Used by @surge_stack logic
 
-        # Overide any of these automatically set settings from kwargs
-        self.settings.update(kwargs)
+        self.update(kwargs)
+
+    def update(self, settings):
+        new_settings = boold_up(settings)
+        if 'CRONTAB_OWNER' not in self.kwargs:
+            self.settings['CRONTAB_OWNER'] = new_settings.get('USER',
+                                                              self.kwargs['USER'])
+        self.CHOWN_TARGET = '{0}:{1}'.format(
+            new_settings.get('USER', self.kwargs['USER']),
+            new_settings.get('GROUP', self.kwargs['GROUP'])
+        )
+
+        self.settings['GIT_TREE'] = new_settings.get('DEPLOY_PATH',
+                                                     self.kwargs['DEPLOY_PATH'])
+
+        # Overide any of these automatically set settings from new_settings
+        self.settings.update(new_settings)
+        
+        sreq = frozenset(REQUIRED_SETTINGS)
+        sset = frozenset(self.settings.keys())
+        missing = sreq.difference(sset)
+
+        empty = filter(lambda k: type(self.settings[k]) not in [str, unicode] and self.settings[k] != '', REQUIRED_SETTINGS)
+
+        if missing or empty:
+            print red("Required settings are missing; {0}".format(', '.join(list(missing))))
+            raise ValueError
+
 
         # Make them attributes
         self.__dict__.update(self.settings)
 
-        env['surge_stack'] = None  # Used by @surge_stack logic
 
+def boold_up(kwargs):
+    """
+    Will convert opt strings of True/False to python True/False.
+    Will upcase keys.
+    """
+    fm = {'FALSE': False, 'TRUE': True}
+    nd = {}
+    for k, v in kwargs.items():
+        try:
+            nk = k.upper()
+        except:
+            nk = k
+        try:
+            nv = fm.get(v.upper(), v)
+        except:
+            nv = v
+        nd[nk] = nv
+    return nd
 
 def bool_opt(opt, kwargs, default=False):
     """
@@ -114,13 +149,43 @@ def surge_stack(f):
     environment that is used to signal to other tasks that they were called
     as part of a sequence of other tasks and to not behave the same as they
     might if called alone.
+
+    A surge_stack task can always override settings with it's kwargs
     """
     @wraps(f)
     def stash_surge_task(*args, **kwargs):
         env['surge_stack'] = f.__name__
+        env.deploy_settings.update(kwargs)
+        show_settings()
         return f(*args, **kwargs)
 
     return stash_surge_task
+
+def skip_if_not(setting, what=True):
+    """
+    When called from a surge_stack task make sure the supplied setting is set
+    to what (True or False) before running the decorated task.
+    """
+    def requires(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            if env['surge_stack']:
+                if not getattr(env.deploy_settings, setting, not what) == what:
+                    return
+            return f(*args, **kwargs)
+        return wrapper
+    return requires
+
+def can_override_settings(f):
+    """
+    A task that when called command line can have its kwargs override the settings of the deploy
+    """
+    @wraps(f)
+    def override(*args, **kwargs):
+        if not env['surge_stack']:
+            env.deploy_settings.update(kwargs)
+        return f(*args, **kwargs)
+    return override
 
 @task
 def sudo_check():
@@ -146,6 +211,7 @@ def show_settings():
         print outcolor("{0} = {1}".format(s, v))
         
 @task
+@skip_if_not('REQUIRE_CLEAN')
 def is_local_clean(*args, **kwargs):
     """
     Checks that the local git work area is clean or not
@@ -198,6 +264,7 @@ def fix_ownerships(*args, **kwargs):
         print ""
 
 @task
+@can_override_settings
 def pull(*args, **kwargs):
     """
     git fetch; git checkout; git pull
@@ -210,8 +277,7 @@ def pull(*args, **kwargs):
     :branch= sets the desired branch
     """
 
-    default_branch = getattr(env.deploy_settings, 'BRANCH_NAME', 'master')
-    branch = kwargs.get('branch', default_branch)
+    branch = getattr(env.deploy_settings, 'BRANCH_NAME', 'master')
     print cyan("Pulling from {0}".format(branch))
     with cd(env.deploy_settings.DEPLOY_PATH):
         run('git fetch')
@@ -233,7 +299,7 @@ def full_pull(*args, **kwargs):
     :branch= sets the desired branch
     """
     fix_ownerships()
-    pull(**kwargs)
+    pull()
     update_submodules()
     fix_ownerships()
 
@@ -328,6 +394,7 @@ def collectstatic(*args, **kwargs):
 
 @task
 @needs_django
+@skip_if_not('SKIP_MIGRATE', False)
 def run_migrations(*args, **kwargs):
     """
     Runs the Django manaagement command migrate for DJANGO_PROJECT=True
@@ -446,6 +513,7 @@ def update_crontab(*args, **kwargs):
 
 @task
 @needs_django
+@skip_if_not('SKIP_SYNCDB', False)
 def sync_db(*args, **kwargs):
     """
     Runs the Django manaagement command syncdb for DJANGO_PROJECT=True
@@ -478,7 +546,6 @@ def full_deploy(*args, **kwargs):
         - Bounce the webserver
 
     runs:
-    show_settings
     fix_ownerships
     pull
     update_submodules
@@ -493,15 +560,13 @@ def full_deploy(*args, **kwargs):
     update_crontab
     """
 
-    show_settings()
 
     print green("Beginning deployment...")
     print ""
 
     print blue('Checking pre-requisites...')
 
-    if bool_opt('require_clean', kwargs, default=True):
-        is_local_clean()
+    is_local_clean()
 
     is_remote_clean()
 
@@ -513,7 +578,7 @@ def full_deploy(*args, **kwargs):
 
     fix_ownerships()
 
-    pull(**kwargs)
+    pull()
 
     update_submodules()
 
@@ -523,11 +588,11 @@ def full_deploy(*args, **kwargs):
 
     collectstatic()
 
-    if not bool_opt('skip_syncdb', kwargs, default=False):
-        sync_db()
+    sync_db()
 
-    if not bool_opt('skip_migrate', kwargs, default=False):
-        run_migrations()
+    # if not bool_opt('skip_migrate', kwargs, default=False):
+    #     run_migrations()
+    run_migrations()
 
     run_extras()
 
@@ -544,4 +609,5 @@ def full_deploy(*args, **kwargs):
 @task
 def full_deploy_with_migrate(*args, **kwargs):
     # env.deploy_settings.SKIP_MIGRATE = False
-    full_deploy(*args, skip_migrate=False, **kwargs)
+    kwargs['SKIP_MIGRATE'] = False
+    full_deploy(*args, **kwargs)
