@@ -31,7 +31,8 @@ from pprint import pprint
 #         'sudo cp crons/-etc-cron.d-restart_intranet_mail /etc/cron.d/restart_intranet_mail',
 #         'sudo chown root:root /etc/cron.d/restart_intranet_mail',
 #         # 'touch collected-assets/less/style.less',
-#     ]
+#     ],
+#     CRON_FILE='/deploy/intranet/confs/intranet/crontab.txt'
 # )
 #
 # env.host_string = PROD_SETTINGS.HOST
