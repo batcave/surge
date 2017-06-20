@@ -1,5 +1,4 @@
 from distutils.util import strtobool
-from path import path
 import re
 from functools import wraps
 from fabric.api import env, local, abort, sudo, cd, run, task
@@ -369,28 +368,34 @@ def collectstatic(*args, **kwargs):
             # We aren't going to prompt if we really want to collectstatic
             run("./manage.py collectstatic -v0 --noinput")
 
+            # Get the settings module
+            out = run("./manage.py diffsettings --all | grep SETTINGS_MODULE")
+            split_sm = out.split("=")
+            sm = None
+            if len(split_sm) > 1:
+                # Sometimes ./manage.py throws errors that end up in this output
+                re_split_sm = re.split(r'(\n|\r|\r\n)', split_sm[1])[0]
+                # Get the settings module
+                m = re.search(r'[\'|\"].*?[\'|\"]', re_split_sm)
+                sm = m.group().strip() if m else None
+
+            # Get the STATIC_ROOT path
+            srp = run("python -c 'from {0} import STATIC_ROOT; print STATIC_ROOT'".format(sm))
+            static_root_path = srp if srp else 'collected-assets'
+
             # Touch the .less/.js files in STATIC_ROOT
-            # Exclude the _cache directory used by Compress
-            out = run("./manage.py diffsettings --all | grep STATIC_ROOT")
-            split_srp = out.split("=")
-
-            if len(split_srp) > 1:
-                # Sometimes ./manage.py throws strange errors that end up in the output
-                re_split_srp = re.split(r'(\n|\r|\r\n)', split_srp[1])[0]
-                srp = re_split_srp.strip()
-            else:
-                srp = None
-
-            static_root_path = eval(srp) if srp else 'collected-assets'  # Might be using path.py, so eval()
-
             if exists(static_root_path):
                 print cyan('Touching *.less and *.js in {0}'.format(static_root_path))
+                # Exclude the _cache directory used by Compress
                 run('find {0} \( -name "*.less" -or -name "*.js" \) -not -path "*/_cache*/*" -exec touch {{}} +'.format(static_root_path))
-                # Only do this if collectstatic is called alone
+                # Only fix the ownerships if collectstatic is called from the command line
                 if not env.surge_stack:
                     sudo('chown {0} -R {1}'.format(env.deploy_settings.CHOWN_TARGET,
                                                    static_root_path))
                 print ""
+            else:
+                print red('Could not locate the STATIC_ROOT path for this project, skipping touches.\n')
+
 
 
 @task
