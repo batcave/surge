@@ -10,7 +10,7 @@
 # return to that projects 'last known good' commit and be able to perform your
 # deploy with minimum frustration or loss of time.
 
-lkg_commit=`git log --patch master -- surge | grep "\+Subproject" | head -n 1 | cut -d " " -f3`
+lkg_commit=`git log --patch master -- surge | grep "\+Subproject" | sed -n 2p | cut -d " " -f3`
 
 cd surge
 git checkout $lkg_commit
