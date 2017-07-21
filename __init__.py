@@ -462,17 +462,21 @@ def bounce_services(*args, **kwargs):
     print cyan("Bouncing processes...{0}").format("(BOUNCING_SERVICES_ONLY_IF_RUNNING)" if BSOIR else "")
     the_services = env.deploy_settings.BOUNCE_SERVICES
     print cyan(the_services)
-
-    r = sudo('service --status-all', quiet=True)
-
-    servreg = r'([\+|\-|\?]).*\]\s+(.*)\b'
-    rservices = [(m.group(1), m.group(2)) for m in re.finditer(servreg, r)]
-
-    there = filter(lambda s: s[1] in the_services, rservices)
-    not_there = filter(lambda s: s not in zip(*there)[1], the_services)
     
-    for s in not_there:
-        print magenta("{0} not found on {1}".format(s, env.deploy_settings.HOST))
+    there = []
+    not_there = []
+    for service in env.deploy_settings.BOUNCE_SERVICES:
+        status = sudo('service %s status' % service, quiet=True)
+        if re.search(r'unrecognized service', status):
+            not_there.append(service)
+            continue
+        if re.search(r'{} stop/waiting'.format(service), status):
+            sglyph = '-'
+        elif re.search(r'{} start/running'.format(service), status):
+            sglyph = '+'
+        else:
+            sglyph = '?'
+        there.append((sglyph, service))
 
     for status, service in there:
         print green("{0}: {1}".format(service, STATUS[status]))
@@ -480,6 +484,9 @@ def bounce_services(*args, **kwargs):
             print red("{} NOT bouncing".format(service))
             continue
         sudo('service %s restart' % service)
+
+    for s in not_there:
+        print magenta("{0} not found on {1}".format(s, env.deploy_settings.HOST))
 
     if bool_opt('restart_nginx', kwargs, default=False):
         restart_nginx()
