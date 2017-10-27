@@ -80,7 +80,7 @@ class BASE_SETTINGS(object):
 
         # Overide any of these automatically set settings from new_settings
         self.settings.update(new_settings)
-        
+
         sreq = frozenset(REQUIRED_SETTINGS)
         sset = frozenset(self.settings.keys())
         missing = sreq.difference(sset)
@@ -209,7 +209,7 @@ def show_settings():
             outcolor = green if v == DEFAULT_SETTINGS[s] else magenta
 
         print outcolor("{0} = {1}".format(s, v))
-        
+
 @task
 @skip_if_not('REQUIRE_CLEAN')
 def is_local_clean(*args, **kwargs):
@@ -414,6 +414,16 @@ def run_migrations(*args, **kwargs):
         with prefix('source activate'):
             run("./manage.py migrate")
 
+    extra_migrations = getattr(env.deploy_settings, 'EXTRA_MIGRATE_FOR_DATABASES', [])
+    if extra_migrations:
+        print ""
+        print cyan("Running extra migrations")
+        with cd(env.deploy_settings.DEPLOY_PATH):
+            with prefix('source activate'):
+                for db in extra_migrations:
+                    run("./manage.py migrate --database {}".format(db))
+
+
 @task
 def run_extras(*args, **kwargs):
     """
@@ -462,7 +472,7 @@ def bounce_services(*args, **kwargs):
     print cyan("Bouncing processes...{0}").format("(BOUNCING_SERVICES_ONLY_IF_RUNNING)" if BSOIR else "")
     the_services = env.deploy_settings.BOUNCE_SERVICES
     print cyan(the_services)
-    
+
     there = []
     not_there = []
     for service in env.deploy_settings.BOUNCE_SERVICES:

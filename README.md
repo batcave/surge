@@ -54,7 +54,6 @@ PROD_SETTINGS = deploy.BASE_SETTINGS(
     EXTRA_COMMANDS=[
         'sudo cp crons/-etc-cron.d-restart_intranet_mail /etc/cron.d/restart_intranet_mail',
         'sudo chown root:root /etc/cron.d/restart_intranet_mail',
-        # 'touch collected-assets/less/style.less',
     ]
 )
 
@@ -206,6 +205,9 @@ Will default to USER:GROUP if not supplied
 ### BOUNCE_SERVICES
 The list of service names that will be restarted at the end of the deployment
 
+### EXTRA_MIGRATE_FOR_DATABASES
+The list of --database names that will be provided to ```./manage migrate --database X``` invokations for projects with several databases and corresponding migrations.
+
 # Utilities
 ## lkg.sh
 This script is meant to be used in a project that has surge as submodule.
@@ -214,7 +216,6 @@ Running it from the root of the project with the surge submodule in it will
 roll back surge to the previous commit it had for this project.
 
 This way if you move surge up to a newer version in your project
-and something about it is preventing you from deploying, you can quickly 
+and something about it is preventing you from deploying, you can quickly
 return to that projects 'last known good' commit and be able to perform your
 deploy with minimum frustration or loss of time.
-
