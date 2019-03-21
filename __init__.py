@@ -499,7 +499,7 @@ def bounce_services(*args, **kwargs):
             else:
                 sglyph = '?'
         elif env.deploy_settings.OS_SERVICE_MANAGER == 'systemd':
-            status = sudo('systemctl status --full %s' % service, quiet=True)
+            status = sudo('systemctl status --full --no-pager %s' % service, quiet=True)
             
             if 'Loaded: not-found' in status:
                 not_there.append(service)
@@ -554,7 +554,7 @@ def services_status(*args, **kwargs):
             
             print hilight(status)
         elif env.deploy_settings.OS_SERVICE_MANAGER == 'systemd':
-            status = sudo('systemctl status --full {}'.format(service), quiet=True)
+            status = sudo('systemctl status --full --no-pager {}'.format(service), quiet=True)
             hilight = green
             
             if 'Active: inactive' in status or 'Active: failed' in status:
