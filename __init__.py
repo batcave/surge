@@ -47,6 +47,8 @@ DEFAULT_SETTINGS = dict(
     SKIP_MIGRATE=False,
     RESTART_NGINX=False,
     BOUNCE_SERVICES_ONLY_IF_RUNNING=False,
+    OS_SERVICE_MANAGER='upstart',
+    REQUIRE_REMOTE_CLEAN=True,
 )
 
 REQUIRED_SETTINGS = [
@@ -80,7 +82,7 @@ class BASE_SETTINGS(object):
 
         # Overide any of these automatically set settings from new_settings
         self.settings.update(new_settings)
-
+        
         sreq = frozenset(REQUIRED_SETTINGS)
         sset = frozenset(self.settings.keys())
         missing = sreq.difference(sset)
@@ -209,7 +211,7 @@ def show_settings():
             outcolor = green if v == DEFAULT_SETTINGS[s] else magenta
 
         print outcolor("{0} = {1}".format(s, v))
-
+        
 @task
 @skip_if_not('REQUIRE_CLEAN')
 def is_local_clean(*args, **kwargs):
@@ -228,6 +230,7 @@ def is_local_clean(*args, **kwargs):
     return not has_changes
 
 @task
+@skip_if_not('REQUIRE_REMOTE_CLEAN')
 def is_remote_clean(*args, **kwargs):
     """
     Checks that the remote git work area is clean or not
@@ -446,7 +449,13 @@ def restart_nginx(*args, **kwargs):
     """
 
     print cyan("Restarting Nginx")
-    sudo('service nginx restart')
+    
+    if env.deploy_settings.OS_SERVICE_MANAGER == 'upstart':
+        sudo('service nginx restart')
+    elif env.deploy_settings.OS_SERVICE_MANAGER == 'systemd':
+        sudo('systemctl restart nginx')
+    else:
+        raise ValueError('invalid OS_SERVICE_MANAGER setting: {}'.format(env.deploy_settings.OS_SERVICE_MANAGER))
 
 @task
 def bounce_services(*args, **kwargs):
@@ -472,20 +481,38 @@ def bounce_services(*args, **kwargs):
     print cyan("Bouncing processes...{0}").format("(BOUNCING_SERVICES_ONLY_IF_RUNNING)" if BSOIR else "")
     the_services = env.deploy_settings.BOUNCE_SERVICES
     print cyan(the_services)
-
+    
     there = []
     not_there = []
     for service in env.deploy_settings.BOUNCE_SERVICES:
-        status = sudo('service %s status' % service, quiet=True)
-        if re.search(r'unrecognized service', status):
-            not_there.append(service)
-            continue
-        if re.search(r'{} stop/waiting'.format(service), status):
-            sglyph = '-'
-        elif re.search(r'{} start/running'.format(service), status):
-            sglyph = '+'
+        if env.deploy_settings.OS_SERVICE_MANAGER == 'upstart':
+            status = sudo('service %s status' % service, quiet=True)
+            
+            if re.search(r'unrecognized service', status):
+                not_there.append(service)
+                continue
+            
+            if re.search(r'{} stop/waiting'.format(service), status):
+                sglyph = '-'
+            elif re.search(r'{} start/running'.format(service), status):
+                sglyph = '+'
+            else:
+                sglyph = '?'
+        elif env.deploy_settings.OS_SERVICE_MANAGER == 'systemd':
+            status = sudo('systemctl status --full %s' % service, quiet=True)
+            
+            if 'Loaded: not-found' in status:
+                not_there.append(service)
+            else:
+                if 'Active: inactive' in status:
+                    sglyph = '-'
+                elif 'Active: active (running)' in status:
+                    sglyph = '+'
+                else:
+                    sglyph = '?'
         else:
-            sglyph = '?'
+            raise ValueError('invalid OS_SERVICE_MANAGER setting: {}'.format(env.deploy_settings.OS_SERVICE_MANAGER))
+        
         there.append((sglyph, service))
 
     for status, service in there:
@@ -493,7 +520,13 @@ def bounce_services(*args, **kwargs):
         if status != '+' and BSOIR:
             print red("{} NOT bouncing".format(service))
             continue
-        sudo('service %s restart' % service)
+        
+        if env.deploy_settings.OS_SERVICE_MANAGER == 'upstart':
+            sudo('service %s restart' % service)
+        elif env.deploy_settings.OS_SERVICE_MANAGER == 'systemd':
+            sudo('systemctl restart {}'.format(service))
+        else:
+            pass ###intentional - already checked
 
     for s in not_there:
         print magenta("{0} not found on {1}".format(s, env.deploy_settings.HOST))
@@ -512,11 +545,24 @@ def services_status(*args, **kwargs):
     """
 
     for service in env.deploy_settings.BOUNCE_SERVICES:
-        status = sudo('service %s status' % service, quiet=True)
-        hilight = green
-        if re.search(r'{} stop/waiting'.format(service), status):
-            hilight = red
-        print hilight(status)
+        if env.deploy_settings.OS_SERVICE_MANAGER == 'upstart':
+            status = sudo('service %s status' % service, quiet=True)
+            hilight = green
+            
+            if re.search(r'{} stop/waiting'.format(service), status):
+                hilight = red
+            
+            print hilight(status)
+        elif env.deploy_settings.OS_SERVICE_MANAGER == 'systemd':
+            status = sudo('systemctl status --full {}'.format(service), quiet=True)
+            hilight = green
+            
+            if 'Active: inactive' in status or 'Active: failed' in status:
+                hilight = red
+            
+            print hilight(status)
+        else:
+            raise ValueError('invalid OS_SERVICE_MANAGER setting: {}'.format(env.deploy_settings.OS_SERVICE_MANAGER))
 
 @task
 def update_crontab(*args, **kwargs):
