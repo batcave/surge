@@ -126,7 +126,7 @@ def bool_opt(opt, kwargs, default=False):
 
     opt = opt.lower()
     default = kwargs[opt] if opt in kwargs else getattr(env.deploy_settings, opt.upper(), default)
-    if type(default) == str:
+    if isinstance(default, str):
         return strtobool(default)
     return default
 
