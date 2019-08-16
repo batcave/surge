@@ -87,10 +87,10 @@ class BASE_SETTINGS(object):
         sset = frozenset(self.settings.keys())
         missing = sreq.difference(sset)
 
-        empty = filter(lambda k: type(self.settings[k]) not in [str, unicode] and self.settings[k] != '', REQUIRED_SETTINGS)
+        empty = [k for k in REQUIRED_SETTINGS if type(self.settings[k]) not in [str, str] and self.settings[k] != '']
 
         if missing or empty:
-            print red("Required settings are missing; {0}".format(', '.join(list(missing))))
+            print(red("Required settings are missing; {0}".format(', '.join(missing))))
             raise ValueError
 
 
@@ -140,7 +140,7 @@ def needs_django(f):
         if not getattr(env.deploy_settings, 'DJANGO_PROJECT', False):
             # If this was not called from another surge task then complain
             if not env.surge_stack:
-                print red("This deployment is not configured as a DJANGO_PROJECT")
+                print(red("This deployment is not configured as a DJANGO_PROJECT"))
             return None
         return f(*args, **kwargs)
     return django_check
@@ -191,26 +191,26 @@ def can_override_settings(f):
 
 @task
 def sudo_check():
-    print cyan("Validating sudo.")
+    print(cyan("Validating sudo."))
     result = sudo('echo "Got it!"')
     if result:
         return True
     else:
-        print red("Could not obtain sudo!")
+        print(red("Could not obtain sudo!"))
         return False
 
 @task
 def show_settings():
-    print "\n({0} {1} {2})\n".format(cyan('Configured'),
+    print("\n({0} {1} {2})\n".format(cyan('Configured'),
                                      green('Default'),
-                                     magenta('Overridden Default'))
+                                     magenta('Overridden Default')))
     for s in sorted(env.deploy_settings.settings.keys()):
         v = env.deploy_settings.settings[s]
         outcolor = cyan
         if s in DEFAULT_SETTINGS:
             outcolor = green if v == DEFAULT_SETTINGS[s] else magenta
 
-        print outcolor("{0} = {1}".format(s, v))
+        print(outcolor("{0} = {1}".format(s, v)))
         
 @task
 @skip_if_not('REQUIRE_CLEAN')
@@ -222,7 +222,7 @@ def is_local_clean(*args, **kwargs):
     git status --porcelain
     """
 
-    print cyan("Ensuring local working area is clean...")
+    print(cyan("Ensuring local working area is clean..."))
     has_changes = local("git status --porcelain", capture=True)
     if has_changes:
         abort(red("Your working directory is not clean."))
@@ -239,7 +239,7 @@ def is_remote_clean(*args, **kwargs):
     git --work-tree=DEPLOY_PATH --git-dir=DEPLOY_PATH/.git status --porcelain
     """
 
-    print cyan("Ensuring remote working area is clean...")
+    print(cyan("Ensuring remote working area is clean..."))
     git_cmd = "git --work-tree={0} --git-dir={0}/.git".format(env.deploy_settings.DEPLOY_PATH)
     has_changes = run(git_cmd + " status --porcelain")
     if has_changes:
@@ -259,12 +259,12 @@ def fix_ownerships(*args, **kwargs):
     """
 
     with cd(env.deploy_settings.DEPLOY_PATH):
-        print cyan('Fixing project ownerships')
+        print(cyan('Fixing project ownerships'))
         sudo('chown %s -R *' % env.deploy_settings.CHOWN_TARGET)
         sudo('chown %s -R .git*' % env.deploy_settings.CHOWN_TARGET)
         sudo('if [ -e .env ]; then chown %s -R .env; fi' % env.deploy_settings.CHOWN_TARGET)
         sudo('if [ -e env ]; then chown %s -R env; fi' % env.deploy_settings.CHOWN_TARGET)
-        print ""
+        print("")
 
 @task
 @can_override_settings
@@ -281,7 +281,7 @@ def pull(*args, **kwargs):
     """
 
     branch = getattr(env.deploy_settings, 'BRANCH_NAME', 'master')
-    print cyan("Pulling from {0}".format(branch))
+    print(cyan("Pulling from {0}".format(branch)))
     with cd(env.deploy_settings.DEPLOY_PATH):
         run('git fetch')
         run('git checkout {0}'.format(branch))
@@ -316,13 +316,13 @@ def update_submodules(*args, **kwargs):
     git submodule update
     """
     with cd(env.deploy_settings.DEPLOY_PATH):
-            print cyan('Initializing submodules')
+            print(cyan('Initializing submodules'))
             run('git submodule init')
-            print ""
+            print("")
 
-            print cyan('Updating submodules')
+            print(cyan('Updating submodules'))
             run('git submodule update')
-            print ""
+            print("")
 
 @task
 def fix_logfile_permissions(*args, **kwargs):
@@ -335,9 +335,9 @@ def fix_logfile_permissions(*args, **kwargs):
 
     with cd(env.deploy_settings.DEPLOY_PATH):
         if getattr(env.deploy_settings, 'LOGS_PATH', False):
-            print cyan("Ensuring proper permissions on log files (-rw-rw-r--)")
+            print(cyan("Ensuring proper permissions on log files (-rw-rw-r--)"))
             sudo("chmod --preserve-root --changes a+r,ug+w -R %s" % env.deploy_settings.LOGS_PATH)
-            print ""
+            print("")
 
 @task
 def install_requirements(*args, **kwargs):
@@ -351,7 +351,7 @@ def install_requirements(*args, **kwargs):
 
     with cd(env.deploy_settings.DEPLOY_PATH):
         with prefix("source activate"):
-            print cyan("Installing from requirements.txt")
+            print(cyan("Installing from requirements.txt"))
             run("pip install -r requirements.txt")
 
 @task
@@ -364,7 +364,7 @@ def collectstatic(*args, **kwargs):
     manage.py collectstatic -v0 --noinput
     """
 
-    print cyan("Collecting static resources")
+    print(cyan("Collecting static resources"))
     with cd(env.deploy_settings.DEPLOY_PATH):
         with prefix('source activate'):
             # Setting verbose to minimal outupt
@@ -388,16 +388,16 @@ def collectstatic(*args, **kwargs):
 
             # Touch the .less/.js files in STATIC_ROOT
             if exists(static_root_path):
-                print cyan('Touching *.less and *.js in {0}'.format(static_root_path))
+                print(cyan('Touching *.less and *.js in {0}'.format(static_root_path)))
                 # Exclude the _cache directory used by Compress
                 run('find {0} \( -name "*.less" -or -name "*.js" \) -not -path "*/_cache*/*" -exec touch {{}} +'.format(static_root_path))
                 # Only fix the ownerships if collectstatic is called from the command line
                 if not env.surge_stack:
                     sudo('chown {0} -R {1}'.format(env.deploy_settings.CHOWN_TARGET,
                                                    static_root_path))
-                print ""
+                print("")
             else:
-                print red('Could not locate the STATIC_ROOT path for this project, skipping touches.\n')
+                print(red('Could not locate the STATIC_ROOT path for this project, skipping touches.\n'))
 
 
 
@@ -412,15 +412,15 @@ def run_migrations(*args, **kwargs):
     manage.py migrate
     """
 
-    print cyan("Running migrations")
+    print(cyan("Running migrations"))
     with cd(env.deploy_settings.DEPLOY_PATH):
         with prefix('source activate'):
             run("./manage.py migrate")
 
     extra_migrations = getattr(env.deploy_settings, 'EXTRA_MIGRATE_FOR_DATABASES', [])
     if extra_migrations:
-        print ""
-        print cyan("Running extra migrations")
+        print("")
+        print(cyan("Running extra migrations"))
         with cd(env.deploy_settings.DEPLOY_PATH):
             with prefix('source activate'):
                 for db in extra_migrations:
@@ -436,7 +436,7 @@ def run_extras(*args, **kwargs):
     with cd(env.deploy_settings.DEPLOY_PATH):
         with prefix('source activate'):
             for cmd in getattr(env.deploy_settings, 'EXTRA_COMMANDS', []):
-                print cyan('Extra:  ' + cmd)
+                print(cyan('Extra:  ' + cmd))
                 run(cmd)
 
 @task
@@ -448,7 +448,7 @@ def restart_nginx(*args, **kwargs):
     sudo service nginx restart
     """
 
-    print cyan("Restarting Nginx")
+    print(cyan("Restarting Nginx"))
     
     if env.deploy_settings.OS_SERVICE_MANAGER == 'upstart':
         sudo('service nginx restart')
@@ -478,9 +478,9 @@ def bounce_services(*args, **kwargs):
     }
 
     BSOIR = env.deploy_settings.BOUNCE_SERVICES_ONLY_IF_RUNNING
-    print cyan("Bouncing processes...{0}").format("(BOUNCING_SERVICES_ONLY_IF_RUNNING)" if BSOIR else "")
+    print(cyan("Bouncing processes...{0}").format("(BOUNCING_SERVICES_ONLY_IF_RUNNING)" if BSOIR else ""))
     the_services = env.deploy_settings.BOUNCE_SERVICES
-    print cyan(the_services)
+    print(cyan(the_services))
     
     there = []
     not_there = []
@@ -516,9 +516,9 @@ def bounce_services(*args, **kwargs):
         there.append((sglyph, service))
 
     for status, service in there:
-        print green("{0}: {1}".format(service, STATUS[status]))
+        print(green("{0}: {1}".format(service, STATUS[status])))
         if status != '+' and BSOIR:
-            print red("{} NOT bouncing".format(service))
+            print(red("{} NOT bouncing".format(service)))
             continue
         
         if env.deploy_settings.OS_SERVICE_MANAGER == 'upstart':
@@ -529,7 +529,7 @@ def bounce_services(*args, **kwargs):
             pass ###intentional - already checked
 
     for s in not_there:
-        print magenta("{0} not found on {1}".format(s, env.deploy_settings.HOST))
+        print(magenta("{0} not found on {1}".format(s, env.deploy_settings.HOST)))
 
     if bool_opt('restart_nginx', kwargs, default=False):
         restart_nginx()
@@ -552,7 +552,7 @@ def services_status(*args, **kwargs):
             if re.search(r'{} stop/waiting'.format(service), status):
                 hilight = red
             
-            print hilight(status)
+            print(hilight(status))
         elif env.deploy_settings.OS_SERVICE_MANAGER == 'systemd':
             status = sudo('systemctl status --full --no-pager {}'.format(service), quiet=True)
             hilight = green
@@ -560,7 +560,7 @@ def services_status(*args, **kwargs):
             if 'Active: inactive' in status or 'Active: failed' in status:
                 hilight = red
             
-            print hilight(status)
+            print(hilight(status))
         else:
             raise ValueError('invalid OS_SERVICE_MANAGER setting: {}'.format(env.deploy_settings.OS_SERVICE_MANAGER))
 
@@ -575,10 +575,10 @@ def update_crontab(*args, **kwargs):
 
     if getattr(env.deploy_settings, 'CRON_FILE', None) and \
        getattr(env.deploy_settings, 'CRONTAB_OWNER', None):
-        print green("Updating crontab...")
+        print(green("Updating crontab..."))
         sudo('crontab -u %s %s' % (env.deploy_settings.CRONTAB_OWNER,
                                    env.deploy_settings.CRON_FILE))
-        print ""
+        print("")
 
 @task
 @needs_django
@@ -591,7 +591,7 @@ def sync_db(*args, **kwargs):
     manage sync_db
     """
 
-    print cyan("Sync DB")
+    print(cyan("Sync DB"))
     with cd(env.deploy_settings.DEPLOY_PATH):
         with prefix('source activate'):
             run("./manage.py syncdb")
@@ -630,20 +630,20 @@ def full_deploy(*args, **kwargs):
     """
 
 
-    print green("Beginning deployment...")
-    print ""
+    print(green("Beginning deployment..."))
+    print("")
 
-    print blue('Checking pre-requisites...')
+    print(blue('Checking pre-requisites...'))
 
     is_local_clean()
 
     is_remote_clean()
 
-    print ""
-    print green("Starting deployment...")
-    print ""
+    print("")
+    print(green("Starting deployment..."))
+    print("")
 
-    print green("Updating environment...")
+    print(green("Updating environment..."))
 
     fix_ownerships()
 
@@ -672,7 +672,7 @@ def full_deploy(*args, **kwargs):
 
     update_crontab()
 
-    print green("Done!")
+    print(green("Done!"))
 
 
 @task
