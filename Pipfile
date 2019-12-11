@@ -7,8 +7,9 @@ verify_ssl = true
 ipdb = "*"
 
 [packages]
-fabric = "*"
+fabric = ">=2.0,<3.0"
 fabulous = "*"
+patchwork = "*"
 
 [requires]
 python_version = "3.6"
