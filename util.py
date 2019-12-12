@@ -38,3 +38,14 @@ def bool_opt(opt, kwargs, default=False):
         return strtobool(default)
     else:
         return default
+
+def maybe_bool(value):
+    if isinstance(value, str):
+        if value.lower() in ('true', 'yes'):
+            return True
+        elif value.lower() in ('false', 'no'):
+            return False
+        else:
+            return value
+    else:
+        return value
