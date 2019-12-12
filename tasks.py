@@ -6,7 +6,7 @@ from invoke.exceptions import AuthFailure, Exit
 from fabulous.color import green, red, blue, cyan, yellow, magenta
 from patchwork.files import exists
 
-from decorators import task as blah, skip_if_not, needs_django
+from decorators import skip_if_not, needs_django, mtask
 
 
 DEFAULT_SETTINGS = {
@@ -24,10 +24,13 @@ DEFAULT_SETTINGS = {
 }
 
 
-@task
+@mtask(default=True)
 def dummy(c, require_clean=None):
-    import ipdb; ipdb.set_trace()
-    pass
+    '''
+    I am a docstring.
+    '''
+    
+    print(require_clean)
 
 @task
 def sudo_check(c):
@@ -47,8 +50,9 @@ def show_settings(c):
     default = green
     overriden = magenta
     
-    print('{} {} {}'.format(unpassed('Configured'), default('Default'), overriden('Overridden Default')))
+    print('{} {} {}'.format(unpassed('Configured'), default('Default'), overriden('Overridden')))
     
+    ###TODO: needs refactor to handle hierarchical settings
     for k,v in sorted(c.config.items(), key=lambda x: x[0]):
         default_value = DEFAULT_SETTINGS.get(k)
         
@@ -490,7 +494,8 @@ def sync_db(c, deploy_path=None):
     with c.cd(deploy_path):
         c.run("./manage.py syncdb")
 
-@task(default=True)
+# @task(default=True)
+@task
 def full_deploy(c, skip_migrate=None):
     """:require_clean=False will deploy even if local repo is not clean
 

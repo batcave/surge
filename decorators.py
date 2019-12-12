@@ -1,5 +1,7 @@
 from functools import wraps
 
+from fabric import Task
+
 
 def needs_django(f):
     """
@@ -7,65 +9,66 @@ def needs_django(f):
     DJANGO_PROJECT = False
     """
     
+    ###FIXME: special case of @require
+    
     @wraps(f)
-    def django_check(*args, **kwargs):
-        if getattr(env.deploy_settings, 'DJANGO_PROJECT', False):
-            return f(*args, **kwargs)
+    def django_check(c, *args, **kwargs):
+        if c.deploy.DJANGO_PROJECT: ###FIXME: broken
+            return f(c, *args, **kwargs)
         else:
             # If this was not called from another surge task then complain
-            if not env.surge_stack:
+            if c.called_task == f.__name__:
                 print(red("This deployment is not configured as a DJANGO_PROJECT"))
             return None
     
     return django_check
 
-def surge_stack(f):
+def mtask(*args, show_settings=True, **kwargs):
     """
-    A surge_stack decorator on a task sets a 'surge_stack' attribute on the
-    environment that is used to signal to other tasks that they were called
-    as part of a sequence of other tasks and to not behave the same as they
-    might if called alone.
-
-    A surge_stack task can always override settings with it's kwargs
+    Roll in originally-called task's name so chained tasks can tell when they're directly called.
+    Merge kwargs and default config into kwargs for easy consumption.
     """
     
-    @wraps(f)
-    def stash_surge_task(*args, **kwargs):
-        env['surge_stack'] = f.__name__
-        env.deploy_settings.update(kwargs)
-        show_settings()
-        return f(*args, **kwargs)
+    def inner(f):
+        @wraps(f)
+        def wrapper(c, *a, **kw):
+            ###TODO: auto-bool
+            
+            c.called_task = f.__name__
+            kw = {k: v or c.deploy[k] or c[k] for k,v in kw.items()}
+            
+            
+            return f(c, *a, **kw)
+        
+        if show_settings:
+            from surge.tasks import show_settings as ss
+            
+            ###NOTE: this is a small break from the base API, which prohibits
+            ###      *args and pre being passed at the same time
+            kwargs['pre'] = [ss] + (list(args) or []) + (list(kwargs['pre']) or [])
+        
+        return Task(wrapper, **kwargs)
+    
+    return inner
 
-    return stash_surge_task
-
-def skip_if_not(setting, what=True):
+def skip_if_not(setting, value=True):
     """
-    When called from a surge_stack task make sure the supplied setting is set
-    to what (True or False) before running the decorated task.
+    When called from a surge task make sure the supplied `setting` is set
+    to `value` before running the decorated task.
     """
+    
+    ###FIXME: skip looking at c.config, since it's already been merged into kwargs
+    ###TODO: refactor to @requires(error=True)
     
     def requires(f):
         @wraps(f)
-        def wrapper(*args, **kwargs):
-            if env['surge_stack'] and not getattr(env.deploy_settings, setting, not what) == what:
-                return
-            else:
-                return f(*args, **kwargs)
+        def wrapper(c, *args, **kwargs):
+            if kwargs.get(setting, c.config.deploy[setting]) == value:
+                return f(c, *args, **kwargs)
         
         return wrapper
     
     return requires
 
-def can_override_settings(f):
-    """
-    A task that when called command line can have its kwargs override the settings of the deploy
-    """
-    
-    @wraps(f)
-    def override(*args, **kwargs):
-        if not env['surge_stack']:
-            env.deploy_settings.update(kwargs)
-        
-        return f(*args, **kwargs)
-    
-    return override
+###TODO: @promote_to_env(*args, **kwargs) - names of configs to promote to envvar; args is straight, kwargs maps config to envvar name
+###TODO: @chown_target - generalizable?
