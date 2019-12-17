@@ -2,6 +2,8 @@ from functools import wraps
 
 from fabric import Task
 
+from surge.util import maybe_bool
+
 
 def needs_django(f):
     """
@@ -23,29 +25,42 @@ def needs_django(f):
     
     return django_check
 
-def mtask(*args, show_settings=True, **kwargs):
+def mtask(*args, show_settings=True, auto_bool=True, **kwargs):
     """
     Roll in originally-called task's name so chained tasks can tell when they're directly called.
     Merge kwargs and default config into kwargs for easy consumption.
+    
+    :param: auto_bool: whether to try parsing as bool; True for all, False for none, or list of arg names
     """
     
+    def try_bool(name, value):
+        if auto_bool is True:
+            return maybe_bool(value)
+        elif auto_bool is False:
+            return value
+        else:
+            if name in auto_bool:
+                return maybe_bool(value)
+    
     def inner(f):
+        
         @wraps(f)
         def wrapper(c, *a, **kw):
-            ###TODO: auto-bool
-            
             c.called_task = f.__name__
-            kw = {k: v or c.deploy[k] or c[k] for k,v in kw.items()}
+            kw = {k: try_bool(k, v or c.deploy[k] or c[k]) for k,v in kw.items()}
             
+            ###TODO: this isn't really a great way to do this, see below
+            if show_settings:
+                from surge.tasks import show_settings as ss
+                ss(c)
             
             return f(c, *a, **kw)
         
-        if show_settings:
-            from surge.tasks import show_settings as ss
-            
-            ###NOTE: this is a small break from the base API, which prohibits
-            ###      *args and pre being passed at the same time
-            kwargs['pre'] = [ss] + (list(args) or []) + (list(kwargs['pre']) or [])
+        ###TODO: Invoke doesn't support late-binding pre-run tasks (yet)
+        # if show_settings:
+        #     ###NOTE: this is a small break from the base API, which prohibits
+        #     ###      *args and pre being passed at the same time
+        #     kwargs['pre'] = ['show_settings'] + (list(args) or []) + (list(kwargs['pre']) or [])
         
         return Task(wrapper, **kwargs)
     

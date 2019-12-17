@@ -1,30 +1,6 @@
 from distutils.util import strtobool
 
 
-def boold_up(kwargs):
-    """
-    Will convert opt strings of True/False to python True/False.
-    Will upcase keys.
-    """
-    
-    fm = {'FALSE': False, 'TRUE': True}
-    nd = {}
-    
-    for k, v in kwargs.items():
-        try:
-            nk = k.upper()
-        except:
-            nk = k
-        
-        try:
-            nv = fm.get(v.upper(), v)
-        except:
-            nv = v
-        
-        nd[nk] = nv
-    
-    return nd
-
 def bool_opt(opt, kwargs, default=False):
     """
     Will convert opt strings to python True/False, if it exists in kwargs.

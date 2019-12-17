@@ -6,7 +6,7 @@ from invoke.exceptions import AuthFailure, Exit
 from fabulous.color import green, red, blue, cyan, yellow, magenta
 from patchwork.files import exists
 
-from decorators import skip_if_not, needs_django, mtask
+from surge.decorators import skip_if_not, needs_django, mtask
 
 
 DEFAULT_SETTINGS = {
