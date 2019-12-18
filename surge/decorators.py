@@ -27,6 +27,40 @@ def the_works(f):
     
     return wrapper
 
+def require(name, value, error=False):
+    '''
+    Require that a kwarg be of a certain value.
+    
+    :param name: name of kwarg
+    :param value: required value
+    :param error: whether to raise an error or just skip
+    '''
+    
+    def inner(f):
+        @wraps(f)
+        def wrapper(c, *a, **kw):
+            ###NOTE: assumes that name exists in kw, since the dev wouldn't require it otherwise
+            
+            if kw[name] == value:
+                return f(c, *a, **kw)
+            else:
+                if _error:
+                    raise MissedRequirement(name, value, kw[name])
+                else:
+                    print(f'skipping {kw["called_task"]} - {name} must be {value}')
+        
+        return wrapper
+    
+    return inner
+
+class MissedRequirement(Exception):
+    def __init__(self, name, expected, actual):
+        self.name = name
+        self.expected = expected
+        self.actual = actual
+        
+        super().__init__(f'Expected {name!r} to be {expected!r}, got {actual!r}.')
+
 def needs_django(f):
     """
     A decorator on a task to ensure the task is not run if
