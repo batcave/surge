@@ -6,7 +6,7 @@ from invoke.exceptions import AuthFailure, Exit
 from fabulous.color import green, red, blue, cyan, yellow, magenta
 from patchwork.files import exists
 
-from surge.decorators import skip_if_not, needs_django, mtask
+from surge.decorators import skip_if_not, needs_django, dtask
 
 
 DEFAULT_SETTINGS = {
@@ -24,7 +24,7 @@ DEFAULT_SETTINGS = {
 }
 
 
-@mtask(default=True)
+@dtask(default=True)
 def dummy(c, require_clean=None):
     '''
     I am a docstring.
