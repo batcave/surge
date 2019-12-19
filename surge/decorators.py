@@ -167,24 +167,5 @@ def show_settings(f):
     
     return wrapper
 
-def skip_if_not(setting, value=True):
-    """
-    When called from a surge task make sure the supplied `setting` is set
-    to `value` before running the decorated task.
-    """
-    
-    ###FIXME: skip looking at c.config, since it's already been merged into kwargs
-    ###TODO: refactor to @requires(error=True)
-    
-    def requires(f):
-        @wraps(f)
-        def wrapper(c, *args, **kwargs):
-            if kwargs.get(setting, c.config.deploy[setting]) == value:
-                return f(c, *args, **kwargs)
-        
-        return wrapper
-    
-    return requires
-
 ###TODO: @promote_to_env(*args, **kwargs) - names of configs to promote to envvar; args is straight, kwargs maps config to envvar name
 ###TODO: @chown_target - generalizable?

@@ -6,7 +6,7 @@ from invoke.exceptions import AuthFailure, Exit
 from fabulous.color import green, red, blue, cyan, yellow, magenta
 from patchwork.files import exists
 
-from surge.decorators import skip_if_not, needs_django, dtask
+from surge.decorators import needs_django, dtask, the_works, require
 
 
 DEFAULT_SETTINGS = {
@@ -32,7 +32,7 @@ def dummy(c, require_clean=None):
     
     print(require_clean)
 
-@task
+@dtask()
 def sudo_check(c):
     print(cyan("Validating sudo."))
     
@@ -44,7 +44,7 @@ def sudo_check(c):
     else:
         return True
 
-@task
+@dtask()
 def show_settings(c):
     unpassed = cyan
     default = green
@@ -67,7 +67,8 @@ def show_settings(c):
         print(outcolor(f"{k} = {v}"))
 
 @task
-@skip_if_not('require_clean')
+@require('require_clean', True)
+@the_works
 def is_local_clean(c, require_clean=None):
     """
     Checks that the local git work area is clean or not
@@ -85,7 +86,8 @@ def is_local_clean(c, require_clean=None):
         return True
 
 @task
-@skip_if_not('require_remote_clean')
+@require('require_remote_clean', True)
+@the_works
 def is_remote_clean(c, deploy_path=None):
     """
     Checks that the remote git work area is clean or not
@@ -94,9 +96,6 @@ def is_remote_clean(c, deploy_path=None):
     git --work-tree=deploy_path --git-dir=deploy_path/.git status --porcelain
     """
     
-    ###FIXME: should already be merged
-    deploy_path = deploy_path or c.deploy.deploy_path
-
     print(cyan("Ensuring remote working area is clean..."))
     git_cmd = f"git --work-tree={deploy_path} --git-dir={deploy_path}/.git"
     has_changes = c.run(f'{git_cmd} status --porcelain')
@@ -106,7 +105,7 @@ def is_remote_clean(c, deploy_path=None):
     else:
         return True
 
-@task
+@dtask()
 def fix_ownerships(c, deploy_path=None, chown_target=None, user=None, group=None):
     """
     Ensure the project files have the USER:GROUP ownership
@@ -117,18 +116,14 @@ def fix_ownerships(c, deploy_path=None, chown_target=None, user=None, group=None
     chown USER:GROUP --recursive .env|env (if these exist)
     """
     
-    ###FIXME: should already be merged
-    deploy_path = deploy_path or c.deploy.deploy_path
-    user = user or c.deploy.user
-    group = group or c.deploy.group
-    chown_target = chown_target or c.deploy.chown_target or f'{user}:{group}'
+    chown_target = chown_target or f'{user}:{group}'
 
     with c.cd(deploy_path):
         print(cyan('Fixing project ownerships'))
         c.sudo(f'chown {chown_target} --recursive .')
         print()
 
-@task
+@dtask()
 def pull(c, deploy_path=None, branch_name=None):
     """
     git fetch; git checkout; git pull
@@ -141,16 +136,13 @@ def pull(c, deploy_path=None, branch_name=None):
     :branch= sets the desired branch
     """
     
-    deploy_path = deploy_path or c.deploy.deploy_path ###FIXME: should already be merged
-    branch = branch_name or c.deploy.BRANCH_NAME ###FIXME: should already be merged
-
     print(cyan(f"Pulling from {branch}"))
     
     with c.cd(deploy_path):
         c.run('git checkout {branch}')
         c.run('git pull')
 
-@task
+@dtask()
 def full_pull(c):
     """
     fix_ownerships, pull, update_submodules, fix_ownerships
@@ -169,7 +161,7 @@ def full_pull(c):
     update_submodules(c)
     fix_ownerships(c)
 
-@task(aliases=['sup'])
+@dtask(aliases=['sup'])
 def update_submodules(c, deploy_path=None):
     """
     Init and update the git submodules for the project
@@ -179,14 +171,12 @@ def update_submodules(c, deploy_path=None):
     git submodule update
     """
     
-    deploy_path = deploy_path or c.deploy.deploy_path ###FIXME: should already be merged
-    
     with cd(deploy_path):
         print(cyan('Initializing and updating submodules recursively'))
         c.run('git submodule update --init --recursive')
         print("")
 
-@task
+@dtask()
 def fix_logfile_permissions(c, deploy_path=None, log_path=None):
     """
     Sets the correct file permissions on the files in the log_path
@@ -195,17 +185,13 @@ def fix_logfile_permissions(c, deploy_path=None, log_path=None):
     chmod --preserve-root --changes a+r,ug+w --recursive logs_path
     """
     
-    ###FIXME: should already be merged
-    deploy_path = deploy_path or c.deploy.deploy_path
-    log_path = log_path or c.deploy.log_path or c.deploy.logs_path
-
     if log_path:
         with c.cd(deploy_path):
             print(cyan("Ensuring proper permissions on log files (0664)"))
             c.sudo(f"chmod --preserve-root --changes --recursive a=rX,ug+w {log_path}")
             print("")
 
-@task
+@dtask(aliases=['req'])
 def install_requirements(c, deploy_path=None):
     """
     Installs the project's requirements from the project's requirements.txt file
@@ -214,9 +200,6 @@ def install_requirements(c, deploy_path=None):
     runs:
     pip install -r requirements.txt
     """
-    
-    ###FIXME: should already be merged
-    deploy_path = deploy_path or c.deploy.deploy_path
     
     with cd(deploy_path):
         print(cyan("Installing pinned dependencies from Pipfile.lock"))
@@ -232,11 +215,7 @@ def collectstatic(c, deploy_path=None, user=None, group=None):
     manage.py collectstatic -v0 --noinput
     """
     
-    ###FIXME: should already be merged
-    deploy_path = deploy_path or c.deploy.deploy_path
-    user = user or c.deploy.user
-    group = group or c.deploy.group
-    chown_target = chown_target or c.deploy.chown_target or f'{user}:{group}'
+    chown_target = chown_target or f'{user}:{group}'
 
     print(cyan("Collecting static resources"))
     
@@ -279,20 +258,17 @@ def collectstatic(c, deploy_path=None, user=None, group=None):
 
 
 
-@task
+@task(aliases=['migrate'])
 @needs_django
-@skip_if_not('skip_migrate', False)
+@require('skip_migrate', False)
 def run_migrations(c, extra_migrations=None):
     """
-    Runs the Django manaagement command migrate for django_project=True
+    Runs the Django management command migrate for django_project=True
 
     runs:
     manage.py migrate
     """
     
-    ###FIXME: should already be merged
-    extra_migrations = extra_migrations or c.deploy.extra_migrate_for_databases
-
     print(cyan("Running migrations"))
     with c.cd(deploy_path):
         c.run("./manage.py migrate")
@@ -305,21 +281,18 @@ def run_migrations(c, extra_migrations=None):
                 c.run(f"./manage.py migrate --database {db}")
 
 
-@task
+@dtask()
 def run_extras(c, extra_commands=[]):
     """
     Runs any extra commands on HOST in extra_commands list of the settings
     """
     
-    ###FIXME: should already be merged
-    extra_commands = extra_commands or c.deploy.extra_commands
-
     with c.cd(deploy_path):
         for cmd in extra_commands:
             print(cyan(f'Extra:  {cmd}'))
             c.run(cmd)
 
-@task
+@dtask()
 def restart_nginx(c, os_service_manager=None):
     """
     Restart the nginx service on HOST
@@ -328,9 +301,6 @@ def restart_nginx(c, os_service_manager=None):
     sudo service nginx restart
     """
     
-    ###FIXME: should already be merged
-    os_service_manager = os_service_manager or c.deploy.os_service_manager
-
     print(cyan("Restarting Nginx"))
     
     if os_service_manager == 'upstart':
@@ -340,7 +310,7 @@ def restart_nginx(c, os_service_manager=None):
     else:
         raise ValueError(f'invalid os_service_manager setting: {os_service_manager}')
 
-@task
+@dtask(aliases=['bounce'])
 def bounce_services(c, bounce_services=[], bounce_services_only_if_running=None, os_service_manager=None):
     """
     Restarts the services on HOST from the bounce_services list of the settings.
@@ -351,11 +321,6 @@ def bounce_services(c, bounce_services=[], bounce_services_only_if_running=None,
     :restart_nginx=True will also restart nginx
     """
     
-    ###FIXME: should already be merged
-    bounce_services = bounce_services or c.deploy.bounce_services
-    bounce_services_only_if_running = bounce_services_only_if_running or c.deploy.bounce_services_only_if_running
-    os_service_manager = os_service_manager or c.deploy.os_service_manager
-
     if not bounce_services:
         return None
 
@@ -425,7 +390,7 @@ def bounce_services(c, bounce_services=[], bounce_services_only_if_running=None,
         restart_nginx(c)
 
 
-@task
+@dtask()
 def services_status(c, bounce_services=[]):
     """
     Returns a list of the current status of the services on HOST from the bounce_services list.
@@ -434,10 +399,6 @@ def services_status(c, bounce_services=[]):
     sudo service X status (where x is each member of the bounce_services list)
     """
     
-    ###FIXME: should already be merged
-    bounce_services = bounce_services or c.deploy.bounce_services
-    os_service_manager = os_service_manager or c.deploy.os_service_manager
-
     for service in bounce_services:
         if os_service_manager == 'upstart':
             status = c.sudo(f'service {service} status', quiet=True)
@@ -458,7 +419,7 @@ def services_status(c, bounce_services=[]):
         else:
             raise ValueError(f'invalid os_service_manager setting: {os_service_manager}')
 
-@task
+@dtask()
 def update_crontab(c, cron_file=None, crontab_owner=None):
     """
     Replaces the current crontab for crontab_owner on HOST with cron_file
@@ -467,10 +428,6 @@ def update_crontab(c, cron_file=None, crontab_owner=None):
     sudo crontab -u crontab_owner cron_file
     """
     
-    ###FIXME: should already be merged
-    cron_file = cron_file or c.deploy.cron_file
-    crontab_owner = crontab_owner or c.deploy.crontab_owner
-    
     if cron_file and crontab_owner:
         print(green("Updating crontab..."))
         c.sudo(f'crontab -u {crontab_owner} {cron_file}')
@@ -478,7 +435,7 @@ def update_crontab(c, cron_file=None, crontab_owner=None):
 
 @task
 @needs_django
-@skip_if_not('skip_syncdb', False)
+@require('skip_syncdb', False)
 def sync_db(c, deploy_path=None):
     """
     Runs the Django management command syncdb for DJANGO_PROJECT=True
@@ -494,8 +451,8 @@ def sync_db(c, deploy_path=None):
     with c.cd(deploy_path):
         c.run("./manage.py syncdb")
 
-# @task(default=True)
-@task
+# @dtask()(default=True)
+@dtask()
 def full_deploy(c, skip_migrate=None):
     """:require_clean=False will deploy even if local repo is not clean
 
@@ -527,10 +484,6 @@ def full_deploy(c, skip_migrate=None):
     update_crontab
     """
     
-    ###FIXME: should already be merged
-    skip_migrate = skip_migrate or c.deploy.skip_migrate
-
-
     print(green("Beginning deployment..."))
     print("")
 
@@ -567,7 +520,7 @@ def full_deploy(c, skip_migrate=None):
     print(green("Done!"))
 
 
-@task
+@dtask()
 def full_deploy_with_migrate(c):
     full_deploy(c, skip_migrate=False)
 
