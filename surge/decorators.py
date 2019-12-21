@@ -77,9 +77,16 @@ def merge_options(f):
     Order of precedence: kwarg[k] > c.deploy[k] > c[k]
     """
     
+    def cascade(*values):
+        for value in values:
+            if value is not None:
+                return value
+        
+        return None
+    
     @wraps(f)
     def wrapper(c, *a, **kw):
-        kw = {k: try_bool(k, v or c.deploy[k] or c[k]) for k,v in kw.items()}
+        kw = {k: try_bool(k, cascade(v, c.deploy[k], c[k])) for k,v in kw.items()}
         
         return f(c, *a, **kw)
     

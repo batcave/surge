@@ -208,7 +208,7 @@ def install_requirements(c, deploy_path=None):
 @task
 @require('django_project', True)
 @the_works
-def collectstatic(c, deploy_path=None, user=None, group=None, django_project=None):
+def collectstatic(c, deploy_path=None, user=None, group=None):
     """
     Collect static assets for a Django project
 
