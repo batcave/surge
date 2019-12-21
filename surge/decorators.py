@@ -61,26 +61,6 @@ class MissedRequirement(Exception):
         
         super().__init__(f'Expected {name!r} to be {expected!r}, got {actual!r}.')
 
-def needs_django(f):
-    """
-    A decorator on a task to ensure the task is not run if
-    DJANGO_PROJECT = False
-    """
-    
-    ###FIXME: special case of @require
-    
-    @wraps(f)
-    def django_check(c, *args, **kwargs):
-        if c.deploy.DJANGO_PROJECT: ###FIXME: broken
-            return f(c, *args, **kwargs)
-        else:
-            # If this was not called from another surge task then complain
-            if c.called_task == f.__name__:
-                print(red("This deployment is not configured as a DJANGO_PROJECT"))
-            return None
-    
-    return django_check
-
 def tag_original(f):
     @wraps(f)
     def wrapper(c, *a, **kw):

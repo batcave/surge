@@ -6,7 +6,7 @@ from invoke.exceptions import AuthFailure, Exit
 from fabulous.color import green, red, blue, cyan, yellow, magenta
 from patchwork.files import exists
 
-from surge.decorators import needs_django, dtask, the_works, require
+from surge.decorators import dtask, the_works, require
 
 
 DEFAULT_SETTINGS = {
@@ -206,8 +206,9 @@ def install_requirements(c, deploy_path=None):
         run("pipenv sync")
 
 @task
-@needs_django
-def collectstatic(c, deploy_path=None, user=None, group=None):
+@require('django_project', True)
+@the_works
+def collectstatic(c, deploy_path=None, user=None, group=None, django_project=None):
     """
     Collect static assets for a Django project
 
@@ -248,7 +249,6 @@ def collectstatic(c, deploy_path=None, user=None, group=None):
             c.run(f'find {static_root_path} \( -name "*.less" -or -name "*.js" \) -not -path "*/_cache*/*" -exec touch {{}} +')
             
             # Only fix the ownerships if collectstatic is called from the command line
-            ###FIXME: need to implement called_task
             if c.called_task == 'collectstatic':
                 c.sudo(f'chown {chown_target} --recursive {static_root_path}')
             
@@ -259,8 +259,9 @@ def collectstatic(c, deploy_path=None, user=None, group=None):
 
 
 @task(aliases=['migrate'])
-@needs_django
+@require('django_project', True)
 @require('skip_migrate', False)
+@the_works
 def run_migrations(c, extra_migrations=None):
     """
     Runs the Django management command migrate for django_project=True
@@ -311,7 +312,7 @@ def restart_nginx(c, os_service_manager=None):
         raise ValueError(f'invalid os_service_manager setting: {os_service_manager}')
 
 @dtask(aliases=['bounce'])
-def bounce_services(c, bounce_services=[], bounce_services_only_if_running=None, os_service_manager=None):
+def bounce_services(c, bounce_services=[], bounce_services_only_if_running=None, os_service_manager=None, restart_nginx=None):
     """
     Restarts the services on HOST from the bounce_services list of the settings.
 
@@ -386,7 +387,7 @@ def bounce_services(c, bounce_services=[], bounce_services_only_if_running=None,
     for s in not_there:
         print(magenta(f"{s} not found on {env.deploy_settings.HOST}"))
 
-    if bool_opt('restart_nginx', kwargs, default=False): ###FIXME
+    if restart_nginx:
         restart_nginx(c)
 
 
@@ -404,7 +405,7 @@ def services_status(c, bounce_services=[]):
             status = c.sudo(f'service {service} status', quiet=True)
             color = green
             
-            if re.search(f'{service} stop/waiting', status):
+            if f'{service} stop/waiting' in status:
                 color = red
             
             print(color(status)) ###FIXME
@@ -419,7 +420,7 @@ def services_status(c, bounce_services=[]):
         else:
             raise ValueError(f'invalid os_service_manager setting: {os_service_manager}')
 
-@dtask()
+@dtask(aliases=['cron'])
 def update_crontab(c, cron_file=None, crontab_owner=None):
     """
     Replaces the current crontab for crontab_owner on HOST with cron_file
@@ -434,8 +435,9 @@ def update_crontab(c, cron_file=None, crontab_owner=None):
         print("")
 
 @task
-@needs_django
+@require('django_project', True)
 @require('skip_syncdb', False)
+@the_works
 def sync_db(c, deploy_path=None):
     """
     Runs the Django management command syncdb for DJANGO_PROJECT=True
