@@ -108,7 +108,7 @@ def merge_options(f):
     
     @wraps(f)
     def wrapper(c, *a, **kw):
-        update = partial(recursive_update(kw, mask=True, condition=lambda k,b,o: not b[k]))
+        update = lambda *x,**y: recursive_update(kw, *x, mask=True, condition=lambda k,b,o: not b[k], **y)
         
         update(c.config.deploy)
         update(c.config)
