@@ -6,7 +6,7 @@ from invoke.exceptions import AuthFailure, Exit
 from fabulous.color import green, red, blue, cyan, yellow, magenta
 from patchwork.files import exists
 
-from surge.decorators import dtask, the_works, require
+from surge.decorators import dtask, stask, the_works, require, tag_original, merge_options
 
 
 DEFAULT_SETTINGS = {
@@ -44,8 +44,9 @@ def sudo_check(c):
     else:
         return True
 
-@dtask()
-def show_settings(c):
+@stask()
+@merge_options
+def show_settings(c, **kwargs):
     unpassed = cyan
     default = green
     overriden = magenta
@@ -526,6 +527,10 @@ def full_deploy(c, skip_migrate=None):
 def full_deploy_with_migrate(c):
     full_deploy(c, skip_migrate=False)
 
+@dtask()
+def test(c, **__):
+    c.local('pytest test --cov=test --cov-branch')
+
 
 namespace = Collection(
     dummy,
@@ -549,5 +554,6 @@ namespace = Collection(
     sync_db,
     full_deploy,
     full_deploy_with_migrate,
+    test,
 )
 namespace.configure(DEFAULT_SETTINGS)

@@ -1,18 +1,28 @@
 from collections.abc import Mapping
-from functools import wraps
+from functools import wraps, partial
 
 from fabric import Task
 
-from surge.util import maybe_bool, Unboolable
+from surge.util import maybe_bool, Unboolable, recursive_update
 
 
 def dtask(*args, **kwargs):
     '''
-    Roll in originally-called task's name so chained tasks can tell when they're directly called.
+    Wrap a task function in the_works and create a Task of it.
     '''
     
     def inner(f):
         return Task(the_works(f), *args, **kwargs)
+    
+    return inner
+
+def stask(*args, **kwargs):
+    '''
+    Wrap a task function in the bare minimum and create a Task.
+    '''
+    
+    def inner(f):
+        return Task(tag_original(f), *args, **kwargs)
     
     return inner
 
@@ -39,15 +49,18 @@ def require(name, value, error=False):
     def inner(f):
         @wraps(f)
         def wrapper(c, *a, **kw):
-            ###NOTE: assumes that name exists in kw, since the dev wouldn't require it otherwise
+            try:
+                actual = kw[name]
+            except KeyError as e:
+                raise MissedRequirement(name, value, e)
             
-            if kw[name] == value:
+            if actual == value:
                 return f(c, *a, **kw)
             else:
                 if _error:
-                    raise MissedRequirement(name, value, kw[name])
+                    raise MissedRequirement(name, value, actual)
                 else:
-                    print(f'skipping {kw["called_task"]} - {name} must be {value}')
+                    print(f'skipping {c.called_task} - {name} must be {value}')
         
         return wrapper
     
@@ -64,7 +77,8 @@ class MissedRequirement(Exception):
 def tag_original(f):
     @wraps(f)
     def wrapper(c, *a, **kw):
-        c.called_task = f.__name__
+        if not hasattr(c, 'called_task'):
+            c.called_task = f.__name__
         
         return f(c, *a, **kw)
     
@@ -74,19 +88,15 @@ def merge_options(f):
     """
     Merge kwargs and default config into kwargs for easy consumption.
     
-    Order of precedence: kwarg[k] > c.deploy[k] > c[k]
+    Order of precedence: kwarg[k] > c.deploy[k] > c[k]]
     """
-    
-    def cascade(*values):
-        for value in values:
-            if value is not None:
-                return value
-        
-        return None
     
     @wraps(f)
     def wrapper(c, *a, **kw):
-        kw = {k: try_bool(k, cascade(v, c.deploy[k], c[k])) for k,v in kw.items()}
+        update = partial(recursive_update(kw, mask=True, condition=lambda k,b,o: not b[k]))
+        
+        update(c.config.deploy)
+        update(c.config)
         
         return f(c, *a, **kw)
     

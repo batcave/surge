@@ -1,4 +1,7 @@
+from collections.abc import Mapping, MutableMapping
+from copy import deepcopy
 from distutils.util import strtobool
+from operator import setitem
 
 
 class Unboolable(ValueError): pass
@@ -30,3 +33,40 @@ def maybe_bool(value, error=False):
                 return value
     else:
         return value
+
+def recursive_update(base_dict, other_dict, preserve=False, obliterate=False, mask=False, condition=lambda k,b,o: True):
+    '''
+    :param preserve: Forbid overwriting non-mapping at all.
+    :param obliterate: Allow overwriting non-mapping with mapping.
+    :param mask: Only allow updating when the key exists in the base.
+    :param condition: Function that determines when an overwrite occurs.
+                      Function params: (key, base, other)
+    '''
+    
+    recurse = lambda k,v: recursive_update(base_dict[k], v, preserve=preserve, obliterate=obliterate)
+    assign = lambda k,v: condition(k, base_dict, other_dict) and setitem(base_dict, k, deepcopy(v))
+    
+    for k,v in other_dict.items():
+        if k in base_dict:
+            if isinstance(v, Mapping):
+                if isinstance(base_dict[k], MutableMapping):
+                    recurse(k, v)
+                elif isinstance(base_dict[k], Mapping):
+                    base_dict[k] = dict(base_dict[k])
+                    recurse(k, v)
+                else:
+                    if obliterate:
+                        assign(k, v)
+                    else:
+                        raise TypeError(f'Cannot overwrite non-mapping with mapping at {k}')
+            else:
+                if preserve:
+                    pass ###intentional
+                else:
+                    assign(k, v)
+        else:
+            if mask:
+                pass ###intentional
+            else:
+                assign(k, v)
+
