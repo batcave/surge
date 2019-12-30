@@ -6,23 +6,38 @@ from fabric import Task
 from surge.util import maybe_bool, Unboolable, recursive_update
 
 
-def dtask(*args, **kwargs):
+def dtask(collection, *args, **kwargs):
     '''
     Wrap a task function in the_works and create a Task of it.
     '''
     
     def inner(f):
-        return Task(the_works(f), *args, **kwargs)
+        return ntask(collection, *args, **kwargs)(the_works(f))
     
     return inner
 
-def stask(*args, **kwargs):
+def stask(collection, *args, **kwargs):
     '''
     Wrap a task function in the bare minimum and create a Task.
     '''
     
+    
     def inner(f):
-        return Task(tag_original(f), *args, **kwargs)
+        return ntask(collection, *args, **kwargs)(tag_original(f))
+    
+    return inner
+
+def ntask(collection, *args, **kwargs):
+    '''
+    Create a task and add it to a collection.
+    '''
+    
+    def inner(f):
+        to_return = Task(f, *args, **kwargs)
+        
+        collection.add_task(to_return)
+        
+        return to_return
     
     return inner
 

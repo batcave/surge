@@ -1,3 +1,4 @@
+from functools import partial
 import re
 
 from fabric import task
@@ -6,7 +7,15 @@ from invoke.exceptions import AuthFailure, Exit
 from fabulous.color import green, red, blue, cyan, yellow, magenta
 from patchwork.files import exists
 
-from surge.decorators import dtask, stask, the_works, require, tag_original, merge_options
+from surge.decorators import (
+    dtask as _dtask_base,
+    stask as _stask_base,
+    ntask as _ntask_base,
+    the_works,
+    require,
+    tag_original,
+    merge_options,
+)
 
 
 DEFAULT_SETTINGS = {
@@ -22,6 +31,11 @@ DEFAULT_SETTINGS = {
         'require_remote_clean': True,
     }
 }
+
+namespace = Collection()
+dtask = partial(_dtask_base, namespace)
+stask = partial(_stask_base, namespace)
+ntask = partial(_ntask_base, namespace)
 
 
 @dtask()
@@ -59,7 +73,7 @@ def show_settings(c, **kwargs):
 
         print(outcolor(f"{k} = {v}"))
 
-@task
+@ntask()
 @require('require_clean', True)
 @the_works
 def is_local_clean(c, require_clean=None):
@@ -78,7 +92,7 @@ def is_local_clean(c, require_clean=None):
     else:
         return True
 
-@task
+@ntask()
 @require('require_remote_clean', True)
 @the_works
 def is_remote_clean(c, deploy_path=None):
@@ -198,7 +212,7 @@ def install_requirements(c, deploy_path=None):
         print(cyan("Installing pinned dependencies from Pipfile.lock"))
         run("pipenv sync")
 
-@task
+@ntask()
 @require('django_project', True)
 @the_works
 def collectstatic(c, deploy_path=None, user=None, group=None):
@@ -251,7 +265,7 @@ def collectstatic(c, deploy_path=None, user=None, group=None):
 
 
 
-@task(aliases=['migrate'])
+@ntask(aliases=['migrate'])
 @require('django_project', True)
 @require('skip_migrate', False)
 @the_works
@@ -427,7 +441,7 @@ def update_crontab(c, cron_file=None, crontab_owner=None):
         c.sudo(f'crontab -u {crontab_owner} {cron_file}')
         print("")
 
-@task
+@ntask()
 @require('django_project', True)
 @require('skip_syncdb', False)
 @the_works
@@ -523,27 +537,4 @@ def test(c, **__):
     c.local('pytest test --cov=test --cov-branch')
 
 
-namespace = Collection(
-    sudo_check,
-    show_settings,
-    is_local_clean,
-    is_remote_clean,
-    fix_ownerships,
-    pull,
-    full_pull,
-    update_submodules,
-    fix_logfile_permissions,
-    install_requirements,
-    collectstatic,
-    run_migrations,
-    run_extras,
-    restart_nginx,
-    bounce_services,
-    services_status,
-    update_crontab,
-    sync_db,
-    full_deploy,
-    full_deploy_with_migrate,
-    test,
-)
 namespace.configure(DEFAULT_SETTINGS)
