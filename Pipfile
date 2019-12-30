@@ -5,11 +5,17 @@ verify_ssl = true
 
 [dev-packages]
 ipdb = "*"
+pytest = "*"
+pytest-cov = "*"
+pytest-sugar = "*"
+pytest-mock = "*"
+pytest-relaxed = "*"
 
 [packages]
 fabric = ">=2.0,<3.0"
 fabulous = "*"
 patchwork = "*"
+invoke = {ref = "master",git = "https://github.com/cajopa/invoke.git",editable = true}
 
 [requires]
 python_version = "3.6"
