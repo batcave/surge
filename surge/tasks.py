@@ -24,14 +24,6 @@ DEFAULT_SETTINGS = {
 }
 
 
-@dtask(default=True)
-def dummy(c, require_clean=None):
-    '''
-    I am a docstring.
-    '''
-    
-    print(require_clean)
-
 @dtask()
 def sudo_check(c):
     print(cyan("Validating sudo."))
@@ -454,8 +446,7 @@ def sync_db(c, deploy_path=None):
     with c.cd(deploy_path):
         c.run("./manage.py syncdb")
 
-# @dtask()(default=True)
-@dtask()
+@dtask(default=True)
 def full_deploy(c, skip_migrate=None):
     """:require_clean=False will deploy even if local repo is not clean
 
@@ -533,7 +524,6 @@ def test(c, **__):
 
 
 namespace = Collection(
-    dummy,
     sudo_check,
     show_settings,
     is_local_clean,
