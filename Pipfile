@@ -15,7 +15,8 @@ pytest-relaxed = "*"
 fabric = ">=2.0,<3.0"
 fabulous = "*"
 patchwork = "*"
-invoke = {ref = "master",git = "https://github.com/cajopa/invoke.git",editable = true}
+invoke = {editable = true,git = "https://github.com/cajopa/invoke.git",ref = "master"}
+path-py = "*"
 
 [requires]
 python_version = "3.6"
