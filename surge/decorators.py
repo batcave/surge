@@ -54,7 +54,7 @@ def the_works(f):
 
 def require(name, value, error=False):
     '''
-    Require that a kwarg be of a certain value.
+    Require that a value from the config be of a certain value.
     
     :param name: name of kwarg
     :param value: required value
@@ -65,17 +65,24 @@ def require(name, value, error=False):
         @wraps(f)
         def wrapper(c, *a, **kw):
             try:
-                actual = kw[name]
+                actual = c.config.deploy[name]
             except KeyError as e:
-                raise MissedRequirement(name, value, e)
+                to_raise = MissedRequirement(name, value, e)
+                
+                if error:
+                    raise to_raise
+                else:
+                    return to_raise.print()
             
             if actual == value:
                 return f(c, *a, **kw)
             else:
-                if _error:
-                    raise MissedRequirement(name, value, actual)
+                to_raise = MissedRequirement(name, value, actual)
+                
+                if error:
+                    raise to_raise
                 else:
-                    print(f'skipping {c.called_task} - {name} must be {value}')
+                    return to_raise.print()
         
         return wrapper
     
@@ -88,6 +95,9 @@ class MissedRequirement(Exception):
         self.actual = actual
         
         super().__init__(f'Expected {name!r} to be {expected!r}, got {actual!r}.')
+    
+    def print(self):
+        print(self.args[0])
 
 def tag_original(f):
     @wraps(f)
