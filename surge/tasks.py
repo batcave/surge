@@ -52,26 +52,21 @@ def sudo_check(c):
 
 @stask()
 @merge_options
-def show_settings(c, **kwargs):
-    unpassed = cyan
+def show_settings(c):
+    configured = cyan
     default = green
-    overriden = magenta
+    # overridden = magenta
     
-    print('{} {} {}'.format(unpassed('Configured'), default('Default'), overriden('Overridden')))
+    print('{} {}'.format(default('Default'), configured('Configured')))
     
-    ###TODO: needs refactor to handle hierarchical settings
-    for k,v in sorted(c.config.items(), key=lambda x: x[0]):
-        default_value = DEFAULT_SETTINGS.get(k)
-        
-        if default_value:
-            if default_value == v:
-                outcolor = default
-            else:
-                outcolor = overriden
+    for k,v in sorted(c.config.deploy.items(), key=lambda x: x[0]):
+        if DEFAULT_SETTINGS.get(k) == v:
+            color = default
         else:
-            outcolor = unpassed
+            color = configured
+        
+        print(color(f'{k} = {v!r}'))
 
-        print(outcolor(f"{k} = {v}"))
 
 @ntask()
 @require('require_clean', True)
