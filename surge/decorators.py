@@ -42,13 +42,10 @@ def ntask(collection, *args, **kwargs):
     return inner
 
 def the_works(f):
-    @wraps(f)
-    @tag_original
-    @show_settings
-    @try_bool(defaults=False)
-    @merge_options
-    def wrapper(c, *a, **kw):
-        return f(c, *a, **kw)
+    wrapper = show_settings(f)
+    wrapper = try_bool(defaults=False)(wrapper)
+    wrapper = merge_options(wrapper)
+    wrapper = tag_original(wrapper)
     
     return wrapper
 

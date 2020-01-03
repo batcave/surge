@@ -68,28 +68,30 @@ def show_settings(c):
         print(color(f'{k} = {v!r}'))
 
 
-@ntask()
-@require('require_clean', True)
+@ntask(aliases=['local'])
 @the_works
-def is_local_clean(c, require_clean=None):
+@require('require_clean', True)
+def is_local_clean(c):
     """
-    Checks that the local git work area is clean or not
+    Checks that the local git work area is clean
 
     runs:
     git status --porcelain
     """
-
+    
+    run = c.runners.local
+    
     print(cyan("Ensuring local working area is clean..."))
-    has_changes = c.local("git status --porcelain")
+    has_changes = run("git status --porcelain")
     
     if has_changes:
         raise Exit(red("Your working directory is not clean."))
     else:
         return True
 
-@ntask()
-@require('require_remote_clean', True)
+@ntask(aliases=['remote'])
 @the_works
+@require('require_remote_clean', True)
 def is_remote_clean(c, deploy_path=None):
     """
     Checks that the remote git work area is clean or not
@@ -98,9 +100,11 @@ def is_remote_clean(c, deploy_path=None):
     git --work-tree=deploy_path --git-dir=deploy_path/.git status --porcelain
     """
     
+    run = c.runners.remote
+    
     print(cyan("Ensuring remote working area is clean..."))
     git_cmd = f"git --work-tree={deploy_path} --git-dir={deploy_path}/.git"
-    has_changes = c.run(f'{git_cmd} status --porcelain')
+    has_changes = run(f'{git_cmd} status --porcelain')
     
     if has_changes:
         raise Exit(red("Remote working directory is not clean."))
@@ -173,7 +177,7 @@ def update_submodules(c, deploy_path=None):
     git submodule update
     """
     
-    with cd(deploy_path):
+    with c.cd(deploy_path):
         print(cyan('Initializing and updating submodules recursively'))
         c.run('git submodule update --init --recursive')
         print("")
@@ -200,16 +204,17 @@ def install_requirements(c, deploy_path=None):
     into the project's activated virtual environment.
 
     runs:
-    pip install -r requirements.txt
+    pipenv sync
     """
     
-    with cd(deploy_path):
+    with c.cd(deploy_path):
         print(cyan("Installing pinned dependencies from Pipfile.lock"))
-        run("pipenv sync")
+        
+        c.run("pipenv sync")
 
 @ntask()
-@require('django_project', True)
 @the_works
+@require('django_project', True)
 def collectstatic(c, deploy_path=None, user=None, group=None):
     """
     Collect static assets for a Django project
@@ -261,9 +266,9 @@ def collectstatic(c, deploy_path=None, user=None, group=None):
 
 
 @ntask(aliases=['migrate'])
-@require('django_project', True)
-@require('skip_migrate', False)
 @the_works
+@require('skip_migrate', False)
+@require('django_project', True)
 def run_migrations(c, extra_migrations=None):
     """
     Runs the Django management command migrate for django_project=True
@@ -437,9 +442,9 @@ def update_crontab(c, cron_file=None, crontab_owner=None):
         print("")
 
 @ntask()
-@require('django_project', True)
-@require('skip_syncdb', False)
 @the_works
+@require('skip_syncdb', False)
+@require('django_project', True)
 def sync_db(c, deploy_path=None):
     """
     Runs the Django management command syncdb for DJANGO_PROJECT=True
@@ -526,10 +531,6 @@ def full_deploy(c, skip_migrate=None):
 @dtask()
 def full_deploy_with_migrate(c):
     full_deploy(c, skip_migrate=False)
-
-@dtask()
-def test(c, **__):
-    c.local('pytest test --cov=test --cov-branch')
 
 
 namespace.configure(DEFAULT_SETTINGS)
