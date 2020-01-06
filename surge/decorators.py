@@ -23,7 +23,7 @@ def stask(collection, *args, **kwargs):
     
     
     def inner(f):
-        return ntask(collection, *args, **kwargs)(tag_original(f))
+        return ntask(collection, *args, **kwargs)(basic_stuff(f))
     
     return inner
 
@@ -45,7 +45,23 @@ def the_works(f):
     wrapper = show_settings(f)
     wrapper = try_bool(defaults=False)(wrapper)
     wrapper = merge_options(wrapper)
-    wrapper = tag_original(wrapper)
+    wrapper = basic_stuff(wrapper)
+    
+    return wrapper
+
+def basic_stuff(f):
+    wrapper = tag_original(f)
+    wrapper = runner(wrapper)
+    
+    return wrapper
+
+def runner(f):
+    @wraps(f)
+    def wrapper(c, *a, **kw):
+        c.local = c.runners.local(c)
+        c.remote = c.runners.remote(c)
+        
+        f(c, *a, **kw)
     
     return wrapper
 
