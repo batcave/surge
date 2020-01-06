@@ -54,8 +54,9 @@ class require:
         context = MockContext()
         context.deploy = {'blah': 'blam'}
         
-        with pytest.raises(AttributeError, match='called_task'):
-            decorated_function(context)
+        result = decorated_function(context)
+        
+        assert result is None
     
     def missing_error(self):
         return_value = object()
@@ -83,8 +84,9 @@ class require:
         context = MockContext()
         context.deploy = {'blam': 'blarg'}
         
-        with pytest.raises(AttributeError, match='called_task'):
-            decorated_function(context)
+        result = decorated_function(context)
+        
+        assert result is None
 
 class tag_original:
     def plain(self):

@@ -6,6 +6,7 @@ from invoke import Collection
 from invoke.exceptions import AuthFailure, Exit
 from fabulous.color import green, red, blue, cyan, yellow, magenta
 from patchwork.files import exists
+from path import Path
 
 from surge.decorators import (
     dtask as _dtask_base,
@@ -38,12 +39,13 @@ stask = partial(_stask_base, namespace)
 ntask = partial(_ntask_base, namespace)
 
 
+
 @dtask()
 def sudo_check(c):
     print(cyan("Validating sudo."))
     
     try:
-        c.sudo('echo')
+        c.remote.sudo('echo')
     except AuthFailure:
         print(red("Could not obtain sudo!"))
         return False
@@ -79,10 +81,8 @@ def is_local_clean(c):
     git status --porcelain
     """
     
-    run = c.runners.local
-    
     print(cyan("Ensuring local working area is clean..."))
-    has_changes = run("git status --porcelain")
+    has_changes = c.local.run("git status --porcelain")
     
     if has_changes:
         raise Exit(red("Your working directory is not clean."))
@@ -100,11 +100,9 @@ def is_remote_clean(c, deploy_path=None):
     git --work-tree=deploy_path --git-dir=deploy_path/.git status --porcelain
     """
     
-    run = c.runners.remote
-    
     print(cyan("Ensuring remote working area is clean..."))
     git_cmd = f"git --work-tree={deploy_path} --git-dir={deploy_path}/.git"
-    has_changes = run(f'{git_cmd} status --porcelain')
+    has_changes = c.remote.run(f'{git_cmd} status --porcelain')
     
     if has_changes:
         raise Exit(red("Remote working directory is not clean."))
@@ -124,9 +122,9 @@ def fix_ownerships(c, deploy_path=None, chown_target=None, user=None, group=None
     
     chown_target = chown_target or f'{user}:{group}'
 
-    with c.cd(deploy_path):
+    with c.remote.cd(deploy_path):
         print(cyan('Fixing project ownerships'))
-        c.sudo(f'chown {chown_target} --recursive .')
+        c.remote.sudo(f'chown {chown_target} --recursive .')
         print()
 
 @dtask()
@@ -144,9 +142,9 @@ def pull(c, deploy_path=None, branch_name=None):
     
     print(cyan(f"Pulling from {branch}"))
     
-    with c.cd(deploy_path):
-        c.run('git checkout {branch}')
-        c.run('git pull')
+    with c.remote.cd(deploy_path):
+        c.remote.run('git checkout {branch}')
+        c.remote.run('git pull')
 
 @dtask()
 def full_pull(c):
@@ -177,9 +175,9 @@ def update_submodules(c, deploy_path=None):
     git submodule update
     """
     
-    with c.cd(deploy_path):
+    with c.remote.cd(deploy_path):
         print(cyan('Initializing and updating submodules recursively'))
-        c.run('git submodule update --init --recursive')
+        c.remote.run('git submodule update --init --recursive')
         print("")
 
 @dtask()
@@ -192,9 +190,9 @@ def fix_logfile_permissions(c, deploy_path=None, log_path=None):
     """
     
     if log_path:
-        with c.cd(deploy_path):
+        with c.remote.cd(deploy_path):
             print(cyan("Ensuring proper permissions on log files (0664)"))
-            c.sudo(f"chmod --preserve-root --changes --recursive a=rX,ug+w {log_path}")
+            c.remote.sudo(f"chmod --preserve-root --changes --recursive a=rX,ug+w {log_path}")
             print("")
 
 @dtask(aliases=['req'])
@@ -207,10 +205,10 @@ def install_requirements(c, deploy_path=None):
     pipenv sync
     """
     
-    with c.cd(deploy_path):
+    with c.remote.cd(deploy_path):
         print(cyan("Installing pinned dependencies from Pipfile.lock"))
         
-        c.run("pipenv sync")
+        c.remote.run("pipenv sync")
 
 @ntask()
 @the_works
@@ -227,13 +225,13 @@ def collectstatic(c, deploy_path=None, user=None, group=None):
 
     print(cyan("Collecting static resources"))
     
-    with c.cd(deploy_path):
+    with c.remote.cd(deploy_path):
         # Setting verbose to minimal outupt
         # We aren't going to prompt if we really want to collectstatic
-        c.run("./manage.py collectstatic -v0 --noinput")
+        c.remote.run("./manage.py collectstatic -v0 --noinput")
 
         # Get the settings module
-        out = c.run("./manage.py diffsettings --all | grep SETTINGS_MODULE")
+        out = c.remote.run("./manage.py diffsettings --all | grep SETTINGS_MODULE")
         split_sm = out.split("=")
         sm = None
         
@@ -246,18 +244,18 @@ def collectstatic(c, deploy_path=None, user=None, group=None):
             sm = m and m.group().strip()
 
         # Get the STATIC_ROOT path
-        static_root_path = c.run(f"pipenv run python -c 'from {sm} import STATIC_ROOT; print(STATIC_ROOT)'") or 'collected-assets'
+        static_root_path = c.remote.run(f"pipenv run python -c 'from {sm} import STATIC_ROOT; print(STATIC_ROOT)'") or 'collected-assets'
 
         # Touch the .less/.js files in STATIC_ROOT
         if exists(c, static_root_path):
             print(cyan(f'Touching *.less and *.js in {static_root_path}'))
             
             # Exclude the _cache directory used by Compress
-            c.run(f'find {static_root_path} \( -name "*.less" -or -name "*.js" \) -not -path "*/_cache*/*" -exec touch {{}} +')
+            c.remote.run(f'find {static_root_path} \( -name "*.less" -or -name "*.js" \) -not -path "*/_cache*/*" -exec touch {{}} +')
             
             # Only fix the ownerships if collectstatic is called from the command line
             if c.called_task == 'collectstatic':
-                c.sudo(f'chown {chown_target} --recursive {static_root_path}')
+                c.remote.sudo(f'chown {chown_target} --recursive {static_root_path}')
             
             print("")
         else:
@@ -278,15 +276,15 @@ def run_migrations(c, extra_migrations=None):
     """
     
     print(cyan("Running migrations"))
-    with c.cd(deploy_path):
-        c.run("./manage.py migrate")
+    with c.remote.cd(deploy_path):
+        c.remote.run("./manage.py migrate")
 
         if extra_migrations:
             print("")
             print(cyan("Running extra migrations"))
             
             for db in extra_migrations:
-                c.run(f"./manage.py migrate --database {db}")
+                c.remote.run(f"./manage.py migrate --database {db}")
 
 
 @dtask()
@@ -295,10 +293,10 @@ def run_extras(c, extra_commands=[]):
     Runs any extra commands on HOST in extra_commands list of the settings
     """
     
-    with c.cd(deploy_path):
+    with c.remote.cd(deploy_path):
         for cmd in extra_commands:
             print(cyan(f'Extra:  {cmd}'))
-            c.run(cmd)
+            c.remote.run(cmd)
 
 @dtask()
 def restart_nginx(c, os_service_manager=None):
@@ -312,9 +310,9 @@ def restart_nginx(c, os_service_manager=None):
     print(cyan("Restarting Nginx"))
     
     if os_service_manager == 'upstart':
-        c.sudo('service nginx restart')
+        c.remote.sudo('service nginx restart')
     elif os_service_manager == 'systemd':
-        c.sudo('systemctl restart nginx')
+        c.remote.sudo('systemctl restart nginx')
     else:
         raise ValueError(f'invalid os_service_manager setting: {os_service_manager}')
 
@@ -349,7 +347,7 @@ def bounce_services(c, bounce_services=[], bounce_services_only_if_running=None,
     not_there = []
     for service in bounce_services:
         if os_service_manager == 'upstart':
-            status = c.sudo(f'service {service} status', quiet=True)
+            status = c.remote.sudo(f'service {service} status', quiet=True)
             
             if re.search(r'unrecognized service', status):
                 not_there.append(service)
@@ -362,7 +360,7 @@ def bounce_services(c, bounce_services=[], bounce_services_only_if_running=None,
             else:
                 sglyph = '?'
         elif os_service_manager == 'systemd':
-            status = c.sudo(f'systemctl status --full --no-pager {service}', quiet=True)
+            status = c.remote.sudo(f'systemctl status --full --no-pager {service}', quiet=True)
             
             if 'Loaded: not-found' in status:
                 not_there.append(service)
@@ -385,9 +383,9 @@ def bounce_services(c, bounce_services=[], bounce_services_only_if_running=None,
             continue
         
         if os_service_manager == 'upstart':
-            c.sudo(f'service {service} restart')
+            c.remote.sudo(f'service {service} restart')
         elif os_service_manager == 'systemd':
-            c.sudo(f'systemctl restart {service}')
+            c.remote.sudo(f'systemctl restart {service}')
         else:
             pass ###intentional - already checked
 
@@ -409,7 +407,7 @@ def services_status(c, bounce_services=[]):
     
     for service in bounce_services:
         if os_service_manager == 'upstart':
-            status = c.sudo(f'service {service} status', quiet=True)
+            status = c.remote.sudo(f'service {service} status', quiet=True)
             color = green
             
             if f'{service} stop/waiting' in status:
@@ -417,7 +415,7 @@ def services_status(c, bounce_services=[]):
             
             print(color(status)) ###FIXME
         elif os_service_manager == 'systemd':
-            status = c.sudo(f'systemctl status --full --no-pager {service}', quiet=True)
+            status = c.remote.sudo(f'systemctl status --full --no-pager {service}', quiet=True)
             color = green
             
             if 'Active: inactive' in status or 'Active: failed' in status:
@@ -438,7 +436,7 @@ def update_crontab(c, cron_file=None, crontab_owner=None):
     
     if cron_file and crontab_owner:
         print(green("Updating crontab..."))
-        c.sudo(f'crontab -u {crontab_owner} {cron_file}')
+        c.remote.sudo(f'crontab -u {crontab_owner} {cron_file}')
         print("")
 
 @ntask()
@@ -457,8 +455,8 @@ def sync_db(c, deploy_path=None):
     deploy_path = deploy_path or c.deploy.deploy_path
 
     print(cyan("Sync DB"))
-    with c.cd(deploy_path):
-        c.run("./manage.py syncdb")
+    with c.remote.cd(deploy_path):
+        c.remote.run("./manage.py syncdb")
 
 @dtask(default=True)
 def full_deploy(c, skip_migrate=None):
@@ -531,6 +529,12 @@ def full_deploy(c, skip_migrate=None):
 @dtask()
 def full_deploy_with_migrate(c):
     full_deploy(c, skip_migrate=False)
+
+@stask()
+def test(c, project_path=None):
+    project_path = (project_path and Path(project_path)) or Path(__file__).parent.parent
+    c.local.run(f'{project_path/".venv"/"bin"/"pytest"} {project_path/"tests"} --cov=surge --cov-branch -s', env={'PYTHONPATH': project_path}, echo=True, pty=True)
+
 
 
 namespace.configure(DEFAULT_SETTINGS)
