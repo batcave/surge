@@ -8,7 +8,7 @@ from fabulous.color import green, red, blue, cyan, yellow, magenta
 from patchwork.files import exists
 from path import Path
 
-from surge.decorators import (
+from .decorators import (
     dtask as _dtask_base,
     stask as _stask_base,
     ntask as _ntask_base,

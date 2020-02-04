@@ -3,7 +3,7 @@ from functools import wraps, partial
 
 from fabric import Task
 
-from surge.util import maybe_bool, Unboolable, recursive_update
+from .util import maybe_bool, Unboolable, recursive_update
 
 
 def dtask(collection, *args, **kwargs):
