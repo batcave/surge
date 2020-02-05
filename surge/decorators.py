@@ -189,7 +189,7 @@ def show_settings(f):
     def wrapper(c, *args, **kwargs):
         ###TODO: this isn't really a great way to do this, see below
         if show_settings:
-            from surge.tasks import show_settings as ss
+            from .tasks import show_settings as ss
             ss(c)
         
         return f(c, *args, **kwargs)

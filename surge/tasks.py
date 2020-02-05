@@ -528,10 +528,18 @@ def full_deploy(c, skip_migrate=None):
 
 @dtask(aliases=['extra-full-deploy', 'xfull-deploy'])
 def full_deploy_with_migrate(c):
+    '''
+    Same as full-deploy --skip-migrate=False
+    '''
+    
     full_deploy(c, skip_migrate=False)
 
 @stask()
 def test(c, project_path=None):
+    '''
+    Run automated tests.
+    '''
+    
     project_path = (project_path and Path(project_path)) or Path(__file__).parent.parent
     c.local.run(f'{project_path/".venv"/"bin"/"pytest"} {project_path/"tests"} --cov=surge --cov-branch -s', env={'PYTHONPATH': project_path}, echo=True, pty=True)
 
