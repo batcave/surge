@@ -40,7 +40,7 @@ ntask = partial(_ntask_base, namespace)
 
 
 
-@dtask()
+@dtask(aliases=['sudo'])
 def sudo_check(c):
     print(cyan("Validating sudo."))
     
@@ -52,7 +52,7 @@ def sudo_check(c):
     else:
         return True
 
-@stask()
+@stask(aliases=['show'])
 @merge_options
 def show_settings(c):
     configured = cyan
@@ -109,7 +109,7 @@ def is_remote_clean(c, deploy_path=None):
     else:
         return True
 
-@dtask()
+@dtask(aliases=['fixown'])
 def fix_ownerships(c, deploy_path=None, chown_target=None, user=None, group=None):
     """
     Ensure the project files have the USER:GROUP ownership
@@ -180,7 +180,7 @@ def update_submodules(c, deploy_path=None):
         c.remote.run('git submodule update --init --recursive')
         print("")
 
-@dtask()
+@dtask(aliases=['fixlog'])
 def fix_logfile_permissions(c, deploy_path=None, log_path=None):
     """
     Sets the correct file permissions on the files in the log_path
@@ -210,7 +210,7 @@ def install_requirements(c, deploy_path=None):
         
         c.remote.run("pipenv sync")
 
-@ntask()
+@ntask(aliases=['collect'])
 @the_works
 @require('django_project', True)
 def collectstatic(c, deploy_path=None, user=None, group=None):
@@ -439,7 +439,7 @@ def update_crontab(c, cron_file=None, crontab_owner=None):
         c.remote.sudo(f'crontab -u {crontab_owner} {cron_file}')
         print("")
 
-@ntask()
+@ntask(aliases=['syncdb'])
 @the_works
 @require('skip_syncdb', False)
 @require('django_project', True)
@@ -526,7 +526,7 @@ def full_deploy(c, skip_migrate=None):
     print(green("Done!"))
 
 
-@dtask()
+@dtask(aliases=['extra-full-deploy', 'xfull-deploy'])
 def full_deploy_with_migrate(c):
     full_deploy(c, skip_migrate=False)
 
