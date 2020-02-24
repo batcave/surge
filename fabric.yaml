@@ -1,3 +1,5 @@
 deploy:
-  require_clean: 721
-port: 23
+  require_clean: true
+  os_service_manager: systemd
+hosts:
+  - paws
