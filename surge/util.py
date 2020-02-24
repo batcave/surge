@@ -2,7 +2,11 @@ from collections.abc import Mapping, MutableMapping
 from copy import deepcopy
 from distutils.util import strtobool
 from operator import setitem
+from random import choice
+import string
 
+
+alphanum = string.ascii_letters + string.digits
 
 class Unboolable(ValueError): pass
 
@@ -70,3 +74,5 @@ def recursive_update(base_dict, other_dict, preserve=False, obliterate=False, ma
             else:
                 assign(k, v)
 
+def random_string(length, codepage=alphanum):
+    return ''.join(choice(codepage) for _ in range(length))

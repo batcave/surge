@@ -3,6 +3,7 @@ from functools import wraps, partial
 
 from fabric import Task
 
+from .extensions import PromptingRunner
 from .util import maybe_bool, Unboolable, recursive_update
 
 
@@ -58,8 +59,8 @@ def basic_stuff(f):
 def runner(f):
     @wraps(f)
     def wrapper(c, *a, **kw):
-        c.local = c.runners.local(c)
-        c.remote = c.runners.remote(c)
+        c.local = PromptingRunner(c.runners.local(c))
+        c.remote = PromptingRunner(c.runners.remote(c))
         
         f(c, *a, **kw)
     
